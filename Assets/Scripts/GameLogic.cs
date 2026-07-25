@@ -27,7 +27,7 @@ public class GameLogic : MonoBehaviour
 
     private string playerUsername = "Player";
 
-    private const float START_PROXIMITY_RADIUS = 10f;  // meters
+    private const float START_PROXIMITY_RADIUS = 5f;  // meters
     private const float FINISH_PROXIMITY_RADIUS = 10f;  // meters
 
     private const string LEADERBOARD_URL = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
@@ -201,7 +201,22 @@ public class GameLogic : MonoBehaviour
 
     void EnterRacingState()
     {
-        Debug.Log("Start line reached — racing!");
+        Debug.Log("Start line reached — starting countdown!");
+
+        if (CountdownTimer.instance != null)
+        {
+            CountdownTimer.instance.StartCountdown(OnCountdownComplete);
+        }
+        else
+        {
+            Debug.LogWarning("CountdownTimer instance is null — skipping countdown");
+            OnCountdownComplete();
+        }
+    }
+
+    private void OnCountdownComplete()
+    {
+        Debug.Log("Countdown complete — racing!");
 
         CurrentState = GameState.Racing;
 
@@ -209,7 +224,6 @@ public class GameLogic : MonoBehaviour
         {
             RaceTimer.instance.StartTimer();
         }
-
     }
 
     // Hook this up to the Play button's OnClick in the Inspector.

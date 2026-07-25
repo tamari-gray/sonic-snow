@@ -9,11 +9,6 @@ public class CountdownTimer : MonoBehaviour
     [Header("Countdown Text")]
     public TMP_Text countdownText;
 
-    [Header("UI To Hide During Countdown")]
-    public GameObject scoreUI;
-    public GameObject timerUI;
-    public GameObject textField;
-
     [Header("Timing")]
     [SerializeField] private float holdDuration = 0.6f;  // how long each number is fully visible
     [SerializeField] private float fadeDuration = 0.4f;  // how long the fade out takes
@@ -35,10 +30,6 @@ public class CountdownTimer : MonoBehaviour
 
     private IEnumerator RunCountdown(System.Action onComplete)
     {
-        // Hide game UI
-        if (scoreUI != null) scoreUI.SetActive(false);
-        if (timerUI != null) timerUI.SetActive(false);
-        if (textField != null) textField.SetActive(false);
 
         countdownText.gameObject.SetActive(true);
 
@@ -70,12 +61,6 @@ public class CountdownTimer : MonoBehaviour
         }
 
         countdownText.gameObject.SetActive(false);
-
-        // Reveal game UI
-        if (scoreUI != null) scoreUI.SetActive(true);
-        if (timerUI != null) timerUI.SetActive(true);
-        if (textField != null) textField.SetActive(true);
-
 
         // Fire the callback
         onComplete?.Invoke();
