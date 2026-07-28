@@ -470,8 +470,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GameLogic
   inputField: {fileID: 1715587412}
-  usernameInputField: {fileID: 0}
-  playButton: {fileID: 0}
+  usernameInputField: {fileID: 1715587412}
+  playButton: {fileID: 1426910567}
 --- !u!4 &337142528
 Transform:
   m_ObjectHideFlags: 0
@@ -480,7 +480,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 337142526}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 673.3355, y: 261.91296, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1626,7 +1626,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 143, y: -227}
+  m_AnchoredPosition: {x: 143, y: -18}
   m_SizeDelta: {x: 83.6, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!1 &1448596844
@@ -1659,9 +1659,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CountdownTimer
   countdownText: {fileID: 1704508503}
-  scoreUI: {fileID: 106063380}
-  timerUI: {fileID: 0}
-  textField: {fileID: 0}
   holdDuration: 0.6
   fadeDuration: 0.4
 --- !u!4 &1448596846
@@ -2170,7 +2167,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 1, y: 0}
   m_AnchorMax: {x: 1, y: 0}
-  m_AnchoredPosition: {x: -569, y: 71}
+  m_AnchoredPosition: {x: -569, y: 276}
   m_SizeDelta: {x: 160, y: 30}
   m_Pivot: {x: 1, y: 0}
 --- !u!114 &1715587412
@@ -2329,6 +2326,53 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6605111590819766859, guid: 0cb5fdeda1d381e41a824ea900824b64, type: 3}
   m_PrefabInstance: {fileID: 8752705094215144399}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &1868293859
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1868293861}
+  - component: {fileID: 1868293860}
+  m_Layer: 0
+  m_Name: CountdownTimer (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1868293860
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1868293859}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1d476b74df4380348a2d7122cb6a3618, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CountdownTimer
+  countdownText: {fileID: 1704508503}
+  holdDuration: 0.6
+  fadeDuration: 0.4
+--- !u!4 &1868293861
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1868293859}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 994.72876, y: 0.00001, z: 1600.5253}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1906232989
 GameObject:
   m_ObjectHideFlags: 0
@@ -3116,9 +3160,9 @@ SceneRoots:
   - {fileID: 1340396377}
   - {fileID: 1906232991}
   - {fileID: 575066346}
-  - {fileID: 337142528}
   - {fileID: 687968506}
   - {fileID: 1448596846}
+  - {fileID: 1868293861}
   - {fileID: 708796302}
   - {fileID: 1568256351}
   - {fileID: 502365213}
@@ -3127,3 +3171,4 @@ SceneRoots:
   - {fileID: 336689858}
   - {fileID: 1507888638}
   - {fileID: 1453196475}
+  - {fileID: 337142528}

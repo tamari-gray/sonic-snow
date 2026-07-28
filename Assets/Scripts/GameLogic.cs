@@ -27,7 +27,7 @@ public class GameLogic : MonoBehaviour
 
     private string playerUsername = "Player";
 
-    private const float START_PROXIMITY_RADIUS = 5f;  // meters
+    private const float START_PROXIMITY_RADIUS = 10f;  // meters
     private const float FINISH_PROXIMITY_RADIUS = 10f;  // meters
 
     private const string LEADERBOARD_URL = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
@@ -260,8 +260,6 @@ public class GameLogic : MonoBehaviour
 
         StartCoroutine(SubmitLeaderboardEntry(playerUsername, elapsedSeconds));
 
-        // Replace with a "continue" button call once the leaderboard UI exists,
-        // instead of looping straight back into the search.
         ReturnToSearching();
     }
 
