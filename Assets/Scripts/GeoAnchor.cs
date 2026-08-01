@@ -95,6 +95,17 @@ public class GeoAnchor : MonoBehaviour
     /// <summary>RMS residual of the last accepted fit, in metres. A rough error bar on placement.</summary>
     public float LastResidual { get; private set; }
 
+    /// <summary>One-line state summary for the on-screen debug log during field testing.</summary>
+    public string StatusLine
+    {
+        get
+        {
+            if (!IsAligned) return "unaligned";
+            if (!HasMotionFit) return $"compass only ({geoSamples.Count} samples, {Baseline:F0}m/{minBaseline:F0}m baseline)";
+            return $"fitted conf {Confidence:F2}, {Baseline:F0}m baseline, RMS {LastResidual:F1}m";
+        }
+    }
+
     private readonly List<Vector3> geoSamples = new List<Vector3>();
     private readonly List<Vector3> worldSamples = new List<Vector3>();
 

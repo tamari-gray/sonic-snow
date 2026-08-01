@@ -25,12 +25,17 @@ public class GameLogic : MonoBehaviour
 
     private string playerUsername = "Player";
 
-    private const float START_PROXIMITY_RADIUS = 10f;  // meters
-    private const float FINISH_PROXIMITY_RADIUS = 10f;  // meters
+    [Header("Proximity")]
+    [Tooltip("How close to the origin counts as being at the start gate, in metres.")]
+    [SerializeField] private float startProximityRadius = 10f;
 
-    // A 25m-accuracy fix can read as "at the start gate" from halfway down the run.
-    // Trigger only on a fix good enough that the radius above actually means something.
-    private const float MAX_TRIGGER_ACCURACY = 10f;  // meters
+    [Tooltip("How close to the finish coord ends the race, in metres.")]
+    [SerializeField] private float finishProximityRadius = 10f;
+
+    [Tooltip("Don't trigger the start on a fix worse than this, in metres. A 25m-accuracy fix " +
+             "can read as 'at the gate' from well down the route. Raise it for tight urban testing " +
+             "where accuracy rarely gets under 10m.")]
+    [SerializeField] private float maxTriggerAccuracy = 10f;
 
     private const string LEADERBOARD_URL = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 
@@ -98,24 +103,39 @@ public class GameLogic : MonoBehaviour
 
         float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.originLat, config.originLng);
 
-        Debug.Log($"You are {distance:F1}m away from start line");
+        // Everything you need to diagnose a failed start, on one line in the on-screen log.
+        Debug.Log($"Start line {distance:F1}m away | GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | " +
+                  $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
 
-        if (distance > START_PROXIMITY_RADIUS) return;
+        if (distance > startProximityRadius) return;
 
-        if (LocationHandler.Instance.HorizontalAccuracy > MAX_TRIGGER_ACCURACY)
+        if (LocationHandler.Instance.HorizontalAccuracy > maxTriggerAccuracy)
         {
             Debug.Log($"At the start line but the fix is only good to " +
                       $"{LocationHandler.Instance.HorizontalAccuracy:F1}m — waiting for a better one");
             return;
         }
 
+        if (GeoAnchor.Instance == null)
+        {
+            Debug.LogError("GeoAnchor instance is null — can't start, content would be placed unaligned!");
+            return;
+        }
+
+        // Spawning before any alignment exists drops the beam at a meaningless spot,
+        // which reads as the whole system being broken. Hold the start instead. This
+        // only happens if the app launched standing still — walking a few metres
+        // produces the fixes it needs.
+        if (!GeoAnchor.Instance.IsAligned)
+        {
+            Debug.Log("At the start line but the world isn't aligned yet — walk a few metres");
+            return;
+        }
+
         // The player is standing at the gate, so their real altitude is the route's
         // originAlt. That's the only moment we can tie surveyed altitudes to Unity's
         // vertical axis, so pin the ground plane here before anything is spawned.
-        if (GeoAnchor.Instance != null)
-            GeoAnchor.Instance.AnchorVertical();
-        else
-            Debug.LogWarning("GeoAnchor instance is null — content will be placed unaligned!");
+        GeoAnchor.Instance.AnchorVertical();
 
         CurrentState = GameState.PlayerInit;
         InitPlayerAndWorld();
@@ -133,9 +153,10 @@ public class GameLogic : MonoBehaviour
         // estimate that converges during the run; GPS is the source of truth.
         float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.finishLat, config.finishLng);
 
-        Debug.Log($"You are {distance:F1}m away from finish line");
+        Debug.Log($"Finish line {distance:F1}m away | GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | " +
+                  $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
 
-        if (distance <= FINISH_PROXIMITY_RADIUS)
+        if (distance <= finishProximityRadius)
         {
             OnFinishLineReached();
         }
@@ -259,7 +280,15 @@ public class GameLogic : MonoBehaviour
             elapsedSeconds = RaceTimer.instance.ElapsedTime;
         }
 
-        StartCoroutine(SubmitLeaderboardEntry(playerUsername, elapsedSeconds));
+        // Submit *then* return, in that order. Firing both at once races the PATCH
+        // against the leaderboard's own GET, and the GET usually wins — so the player
+        // finishes a run and their time isn't on the board they're looking at.
+        StartCoroutine(SubmitThenReturn(playerUsername, elapsedSeconds));
+    }
+
+    private IEnumerator SubmitThenReturn(string username, float elapsedSeconds)
+    {
+        yield return StartCoroutine(SubmitLeaderboardEntry(username, elapsedSeconds));
 
         ReturnToSearching();
     }
