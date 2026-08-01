@@ -14,8 +14,6 @@ public class GameLogic : MonoBehaviour
         FinishedRace
     }
 
-    public TMP_InputField inputField;
-
     [Header("Username UI")]
     public TMP_InputField usernameInputField;
     public GameObject playButton;
@@ -29,6 +27,10 @@ public class GameLogic : MonoBehaviour
 
     private const float START_PROXIMITY_RADIUS = 10f;  // meters
     private const float FINISH_PROXIMITY_RADIUS = 10f;  // meters
+
+    // A 25m-accuracy fix can read as "at the start gate" from halfway down the run.
+    // Trigger only on a fix good enough that the radius above actually means something.
+    private const float MAX_TRIGGER_ACCURACY = 10f;  // meters
 
     private const string LEADERBOARD_URL = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 
@@ -54,8 +56,6 @@ public class GameLogic : MonoBehaviour
             Debug.LogError("No route config — aborting game start");
             yield break;
         }
-
-        //inputField.onValueChanged.AddListener(CheckCommand);
 
         BeginSearchingForStart();
     }
@@ -94,25 +94,31 @@ public class GameLogic : MonoBehaviour
             return;
         }
 
-        float distance = HaversineDistance(currentLat, currentLng, MapDataFetcher.Instance.LoadedConfig.originLat, MapDataFetcher.Instance.LoadedConfig.originLng);
+        MapData config = MapDataFetcher.Instance.LoadedConfig;
+
+        float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.originLat, config.originLng);
 
         Debug.Log($"You are {distance:F1}m away from start line");
 
-        if (distance <= START_PROXIMITY_RADIUS)
-        {
-            if (CalibrateWorld.Instance != null && !CalibrateWorld.Instance.IsCalibrated)
-            {
-                CalibrateWorld.Instance.AlignWorldToRoute(
-                    MapDataFetcher.Instance.LoadedConfig.originLat,
-                    MapDataFetcher.Instance.LoadedConfig.originLng,
-                    MapDataFetcher.Instance.LoadedConfig.finishLat,
-                    MapDataFetcher.Instance.LoadedConfig.finishLng
-                );
-            }
+        if (distance > START_PROXIMITY_RADIUS) return;
 
-            CurrentState = GameState.PlayerInit;
-            InitPlayerAndWorld();
+        if (LocationHandler.Instance.HorizontalAccuracy > MAX_TRIGGER_ACCURACY)
+        {
+            Debug.Log($"At the start line but the fix is only good to " +
+                      $"{LocationHandler.Instance.HorizontalAccuracy:F1}m — waiting for a better one");
+            return;
         }
+
+        // The player is standing at the gate, so their real altitude is the route's
+        // originAlt. That's the only moment we can tie surveyed altitudes to Unity's
+        // vertical axis, so pin the ground plane here before anything is spawned.
+        if (GeoAnchor.Instance != null)
+            GeoAnchor.Instance.AnchorVertical();
+        else
+            Debug.LogWarning("GeoAnchor instance is null — content will be placed unaligned!");
+
+        CurrentState = GameState.PlayerInit;
+        InitPlayerAndWorld();
     }
 
     private void CheckFinishLineProximity()
@@ -121,7 +127,11 @@ public class GameLogic : MonoBehaviour
 
         if (MapDataFetcher.Instance == null || !MapDataFetcher.Instance.IsLoaded) return;
 
-        float distance = HaversineDistance(currentLat, currentLng, MapDataFetcher.Instance.LoadedConfig.finishLat, MapDataFetcher.Instance.LoadedConfig.finishLng);
+        MapData config = MapDataFetcher.Instance.LoadedConfig;
+
+        // Race timing is decided by GPS, never by the visual beam. The beam is an
+        // estimate that converges during the run; GPS is the source of truth.
+        float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.finishLat, config.finishLng);
 
         Debug.Log($"You are {distance:F1}m away from finish line");
 
@@ -131,29 +141,20 @@ public class GameLogic : MonoBehaviour
         }
     }
 
-    private float HaversineDistance(double lat1, double lng1, double lat2, double lng2)
-    {
-        const double EARTH_RADIUS_M = 6371000d;
-
-        double lat1Rad = lat1 * Mathf.Deg2Rad;
-        double lat2Rad = lat2 * Mathf.Deg2Rad;
-        double deltaLat = (lat2 - lat1) * Mathf.Deg2Rad;
-        double deltaLng = (lng2 - lng1) * Mathf.Deg2Rad;
-
-        double a = System.Math.Sin(deltaLat / 2) * System.Math.Sin(deltaLat / 2) +
-                   System.Math.Cos(lat1Rad) * System.Math.Cos(lat2Rad) *
-                   System.Math.Sin(deltaLng / 2) * System.Math.Sin(deltaLng / 2);
-
-        double c = 2 * System.Math.Atan2(System.Math.Sqrt(a), System.Math.Sqrt(1 - a));
-
-        return (float)(EARTH_RADIUS_M * c);
-    }
-
-
     void BeginSearchingForStart()
     {
         Debug.Log("Searching for start line...");
         CurrentState = GameState.SearchingForStart;
+
+        // Tear down the previous run's world before resetting the alignment, so
+        // nothing is left parented to a root that's about to jump.
+        if (FinishLinePillar.Instance != null) FinishLinePillar.Instance.ClearPillar();
+        if (CheckpointDomeSpawner.Instance != null) CheckpointDomeSpawner.Instance.ClearDomes();
+
+        // Clear the previous run's alignment. VIO has drifted since then, and the
+        // player may well have ridden the lift back up, so the old fit is stale.
+        if (GeoAnchor.Instance != null)
+            GeoAnchor.Instance.ResetAlignment();
 
         if (LeaderboardUI.Instance != null)
             LeaderboardUI.Instance.Show();

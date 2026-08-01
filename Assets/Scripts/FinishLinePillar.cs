@@ -1,11 +1,19 @@
 using UnityEngine;
 
+/// <summary>
+/// Spawns the finish-line beam. The pillar is parented to GeoAnchor.Root and
+/// positioned in ENU metres, so it keeps tracking the alignment as GeoAnchor
+/// refines it during the run rather than being frozen at its spawn position.
+/// </summary>
 public class FinishLinePillar : MonoBehaviour
 {
     public static FinishLinePillar Instance;
 
     [Header("Pillar Settings")]
     [SerializeField] private GameObject pillarPrefab;
+
+    [Tooltip("Vertical nudge in metres, for tuning where the beam meets the snow.")]
+    [SerializeField] private float verticalOffset = 0f;
 
     private GameObject spawnedPillar;
 
@@ -16,12 +24,30 @@ public class FinishLinePillar : MonoBehaviour
 
     public void SpawnPillar()
     {
-        MapData mapData = MapDataFetcher.Instance.LoadedConfig;
-        Vector3 worldPos = GpsUtils.GpsToWorld(mapData.finishLat, mapData.finishLng, mapData.originLat, mapData.originLng);
+        ClearPillar(); // otherwise a second race leaks a duplicate pillar
 
-        spawnedPillar = Instantiate(pillarPrefab, worldPos, Quaternion.identity);
+        if (GeoAnchor.Instance == null)
+        {
+            Debug.LogError("[FinishLinePillar] No GeoAnchor in the scene — can't place the beam.");
+            return;
+        }
 
-        Debug.Log("Finish line pillar spawned at world pos: " + worldPos);
+        MapData config = MapDataFetcher.Instance.LoadedConfig;
+
+        Vector3 enu = config.HasSurveyedAltitudes
+            ? GpsUtils.GpsToEnu(config.finishLat, config.finishLng, config.finishAlt,
+                                config.originLat, config.originLng, config.originAlt)
+            : GpsUtils.GpsToEnu(config.finishLat, config.finishLng,
+                                config.originLat, config.originLng);
+
+        enu.y += verticalOffset;
+
+        spawnedPillar = Instantiate(pillarPrefab, GeoAnchor.Instance.Root);
+        spawnedPillar.transform.localPosition = enu;
+        spawnedPillar.transform.localRotation = Quaternion.identity;
+
+        Debug.Log($"[FinishLinePillar] Beam placed at ENU {enu} " +
+                  $"({enu.magnitude:F0}m from start, {(config.HasSurveyedAltitudes ? "surveyed altitude" : "no altitude data")})");
     }
 
     public void ClearPillar()

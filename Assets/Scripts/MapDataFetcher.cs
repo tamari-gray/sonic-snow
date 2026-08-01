@@ -22,9 +22,6 @@ public class MapDataFetcher : MonoBehaviour
         UnityWebRequest request = UnityWebRequest.Get(DATABASE_URL);
         yield return request.SendWebRequest();
 
-        Debug.LogError("sent web request");
-
-
         if (request.result == UnityWebRequest.Result.Success)
         {
             Debug.Log("web request result: " + request.downloadHandler.text);
