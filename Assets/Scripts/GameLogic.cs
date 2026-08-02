@@ -123,12 +123,12 @@ public class GameLogic : MonoBehaviour
         }
 
         // Spawning before any alignment exists drops the beam at a meaningless spot,
-        // which reads as the whole system being broken. Hold the start instead. This
-        // only happens if the app launched standing still — walking a few metres
-        // produces the fixes it needs.
+        // which reads as the whole system being broken. Hold the start instead. With
+        // the launch seed this should only ever trip while the route config is still
+        // downloading, since the seed needs no GPS fix and no movement.
         if (!GeoAnchor.Instance.IsAligned)
         {
-            Debug.Log("At the start line but the world isn't aligned yet — walk a few metres");
+            Debug.Log("At the start line but the world isn't aligned yet — waiting on the route config");
             return;
         }
 

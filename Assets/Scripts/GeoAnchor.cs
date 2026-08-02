@@ -17,8 +17,17 @@ using UnityEngine;
 /// heading than a magnetometer does, and because the fit re-runs on every fix it
 /// also absorbs VIO drift over a long descent instead of accumulating it.
 ///
-/// The compass is used only to seed a rough alignment for the first few seconds,
-/// before the player has covered enough ground for the fit to be well conditioned.
+/// The seed: the fit needs ~20m of travel before it's well conditioned, so something
+/// has to cover the gap. This build assumes a launch ritual — the player stands at
+/// the start line with the phone pointed at the finish while the app boots. That
+/// pins both unknowns immediately: Unity's origin is the start, and Unity's forward
+/// is the route bearing. It beats the magnetometer (no interference from cars, lift
+/// towers or rebar) but it is an assumption, not a measurement, so the motion fit
+/// still takes over as soon as it has a baseline and quietly corrects a sloppy ritual.
+///
+/// IMPORTANT: the AR session origin is set when ARCore first establishes tracking,
+/// a second or two after launch — not the instant the icon is tapped. The phone has
+/// to be held steady on the finish through app startup, not just at launch.
 ///
 /// Vertical is handled separately: GPS altitude is far too noisy to fit, so the
 /// ground plane is pinned once from the camera's tracked height at the start gate
@@ -49,9 +58,6 @@ public class GeoAnchor : MonoBehaviour
     [Tooltip("Rolling buffer size. Older samples are dropped so the fit tracks recent drift.")]
     [SerializeField] private int maxSamples = 40;
 
-    [Tooltip("Accuracy limit for the initial compass seed, in metres. Looser than the fit's limit so the player always sees something, even under trees or in bad conditions.")]
-    [SerializeField] private float maxSeedAccuracy = 30f;
-
     [Tooltip("Largest GPS pipeline lag to compensate for, in seconds.")]
     [SerializeField] private float maxFixLag = 2f;
 
@@ -80,13 +86,13 @@ public class GeoAnchor : MonoBehaviour
     /// <summary>Parent transform for geo-placed content. Position children in ENU metres.</summary>
     public Transform Root => geoRoot;
 
-    /// <summary>True once Root holds any usable alignment, compass-seeded or better.</summary>
+    /// <summary>True once Root holds any usable alignment, launch-seeded or better.</summary>
     public bool IsAligned { get; private set; }
 
-    /// <summary>True once the alignment comes from the motion fit rather than the compass.</summary>
+    /// <summary>True once the alignment comes from the motion fit rather than the launch seed.</summary>
     public bool HasMotionFit { get; private set; }
 
-    /// <summary>0-1. Below ~0.3 the placement is compass-grade and can be tens of degrees out.</summary>
+    /// <summary>0-1. Below ~0.3 the placement is still the launch seed and is only as good as the ritual was.</summary>
     public float Confidence { get; private set; }
 
     /// <summary>Spread of the current sample set in metres. Drives Confidence.</summary>
@@ -101,7 +107,7 @@ public class GeoAnchor : MonoBehaviour
         get
         {
             if (!IsAligned) return "unaligned";
-            if (!HasMotionFit) return $"compass only ({geoSamples.Count} samples, {Baseline:F0}m/{minBaseline:F0}m baseline)";
+            if (!HasMotionFit) return $"launch seed ({geoSamples.Count} samples, {Baseline:F0}m/{minBaseline:F0}m baseline)";
             return $"fitted conf {Confidence:F2}, {Baseline:F0}m baseline, RMS {LastResidual:F1}m";
         }
     }
@@ -129,6 +135,15 @@ public class GeoAnchor : MonoBehaviour
     private float groundY;
     private bool groundAnchored;
 
+    // Camera pose at the earliest frame we could read it — the launch ritual says the
+    // player was standing at the start line facing the finish at that moment. The yaw
+    // stays valid for the whole AR session (Unity's frame never moves), so a reset
+    // between races keeps it and only re-derives position.
+    private float launchYaw;
+    private Vector3 launchPosition;
+    private bool hasLaunchPose;
+    private bool hasSeededOnce;
+
     private void Awake()
     {
         Instance = this;
@@ -137,10 +152,6 @@ public class GeoAnchor : MonoBehaviour
         {
             geoRoot = new GameObject("GeoAnchorRoot").transform;
         }
-
-        // Only used to seed the initial guess. LocationHandler starts the location
-        // service, which the magnetometer depends on for true (vs magnetic) heading.
-        Input.compass.enabled = true;
     }
 
     private void Update()
@@ -148,9 +159,24 @@ public class GeoAnchor : MonoBehaviour
         if (arCamera == null) arCamera = Camera.main;
         if (arCamera == null) return;
 
+        CaptureLaunchPose();
         RecordPose();
         PollGps();
+        if (!IsAligned) TrySeed();
         EaseRoot();
+    }
+
+    /// <summary>
+    /// Grabs the camera pose on the first frame it exists. Under the launch ritual
+    /// this is the player standing at the start line facing the finish.
+    /// </summary>
+    private void CaptureLaunchPose()
+    {
+        if (hasLaunchPose) return;
+
+        launchYaw = arCamera.transform.eulerAngles.y;
+        launchPosition = arCamera.transform.position;
+        hasLaunchPose = true;
     }
 
     private void RecordPose()
@@ -218,11 +244,6 @@ public class GeoAnchor : MonoBehaviour
 
         // Seed on a much looser accuracy bound than the fit uses. A rough beam beats
         // no beam, and under trees or heavy cloud we might never see a good fix.
-        if (!IsAligned && location.HorizontalAccuracy <= maxSeedAccuracy)
-        {
-            SeedFromCompass(enu, world);
-        }
-
         // A fix worse than this teaches the fit more noise than signal.
         if (location.HorizontalAccuracy > maxHorizontalAccuracy) return;
 
@@ -243,36 +264,71 @@ public class GeoAnchor : MonoBehaviour
     }
 
     /// <summary>
-    /// Rough initial alignment from the magnetometer, so the player sees something
-    /// before they have moved. Expect 15-20 degrees of error, worse near chairlifts
-    /// and anything else made of steel. The motion fit replaces this as soon as it
-    /// has a baseline.
+    /// Initial alignment from the launch ritual: the player stood at the start line
+    /// facing the finish while AR tracking established, so the camera's launch yaw
+    /// corresponds to the start-to-finish bearing, and the launch position is the
+    /// route origin. Applies immediately — no GPS fix and no movement required, so
+    /// the beam is up before the race starts.
     /// </summary>
-    private void SeedFromCompass(Vector3 enu, Vector3 cameraWorld)
+    private void TrySeed()
     {
-        if (!Input.compass.enabled || Input.compass.timestamp <= 0d) return;
+        if (!hasLaunchPose) return;
 
-        float cameraYaw = arCamera.transform.eulerAngles.y;
+        MapDataFetcher fetcher = MapDataFetcher.Instance;
+        if (fetcher == null || !fetcher.IsLoaded) return;
 
-        // trueHeading is where the device points relative to north; cameraYaw is
-        // where it points in Unity's world. The difference is the Unity yaw at
-        // which north sits — which is exactly the rotation Root needs, since Root's
-        // local +Z is geographic north.
-        float northYaw = Mathf.DeltaAngle(Input.compass.trueHeading, cameraYaw);
+        MapData config = fetcher.LoadedConfig;
+
+        double bearing = GpsUtils.Bearing(config.originLat, config.originLng,
+                                          config.finishLat, config.finishLng);
+
+        // The launch yaw represents the route bearing. Bearings and Unity yaw both
+        // increase clockwise, so a true bearing t sits at Unity yaw (launchYaw - B).
+        // North is bearing 0, so north sits at (launchYaw - B) — and Root's local +Z
+        // is north, which makes that Root's rotation.
+        float northYaw = launchYaw - (float)bearing;
 
         targetRotation = Quaternion.Euler(0f, northYaw, 0f);
-        targetPosition = WithGroundY(cameraWorld - targetRotation * Flat(enu), cameraWorld);
+        targetPosition = SeedPosition(targetRotation);
 
         geoRoot.SetPositionAndRotation(targetPosition, targetRotation);
 
         IsAligned = true;
-        Confidence = 0.15f;
+        Confidence = 0.2f;
+        hasSeededOnce = true;
 
         if (logCalibration)
         {
-            Debug.Log($"[GeoAnchor] Compass seed. trueHeading={Input.compass.trueHeading:F1}deg, " +
-                      $"north sits at Unity yaw {northYaw:F1}deg. Rough until the player moves.");
+            Debug.Log($"[GeoAnchor] Launch seed. Route bearing {bearing:F1}deg, launch yaw " +
+                      $"{launchYaw:F1}deg, north sits at Unity yaw {northYaw:F1}deg. " +
+                      $"Only as good as the launch ritual until the motion fit engages.");
         }
+    }
+
+    /// <summary>
+    /// Where the route origin sits in Unity space. Straight after launch that's the
+    /// launch position, per the ritual. After a reset between races the player is at
+    /// the finish, not the start, so it's re-derived from their current fix instead.
+    /// </summary>
+    private Vector3 SeedPosition(Quaternion rotation)
+    {
+        // First seed: trust the ritual. The player is standing on the origin, which is
+        // a better position estimate than a single GPS fix carrying several metres of noise.
+        if (!hasSeededOnce) return WithGroundY(launchPosition, launchPosition);
+
+        // Re-seed between races: the player is at the finish, not the start, so the
+        // launch position tells us nothing useful. Derive the origin from where they
+        // are now instead.
+        LocationHandler location = LocationHandler.Instance;
+        if (location == null || !location.IsReady) return WithGroundY(launchPosition, launchPosition);
+
+        MapData config = MapDataFetcher.Instance.LoadedConfig;
+
+        Vector3 enu = GpsUtils.GpsToEnu(location.CurrentLatitude, location.CurrentLongitude,
+                                        config.originLat, config.originLng);
+
+        Vector3 camera = arCamera.transform.position;
+        return WithGroundY(camera - rotation * Flat(enu), camera);
     }
 
     /// <summary>
@@ -289,7 +345,7 @@ public class GeoAnchor : MonoBehaviour
         Baseline = Spread(geoSamples, geoCentroid);
 
         // Over a short baseline the sample noise dominates the actual displacement
-        // and the yaw estimate is meaningless. Better to keep the compass seed.
+        // and the yaw estimate is meaningless. Better to keep the launch seed.
         if (Baseline < minBaseline) return;
 
         double num = 0d, den = 0d;
@@ -378,6 +434,10 @@ public class GeoAnchor : MonoBehaviour
     /// <summary>
     /// Clears the alignment and all samples. Call between races so a second run
     /// re-solves from scratch instead of inheriting the first run's drift.
+    ///
+    /// Deliberately keeps the launch pose: Unity's frame doesn't move for the life of
+    /// the AR session, so the yaw the launch ritual gave us is still valid for run two.
+    /// Only the position needs re-deriving, which TrySeed does from the current fix.
     /// </summary>
     public void ResetAlignment()
     {
