@@ -167,8 +167,9 @@ public class GeoAnchor : MonoBehaviour
     }
 
     /// <summary>
-    /// Grabs the camera pose on the first frame it exists. Under the launch ritual
-    /// this is the player standing at the start line facing the finish.
+    /// Grabs the camera pose on the first frame it exists, so the anchor works even
+    /// with no calibration screen present. Under the launch ritual this is the player
+    /// standing at the start line facing the finish.
     /// </summary>
     private void CaptureLaunchPose()
     {
@@ -177,6 +178,33 @@ public class GeoAnchor : MonoBehaviour
         launchYaw = arCamera.transform.eulerAngles.y;
         launchPosition = arCamera.transform.position;
         hasLaunchPose = true;
+    }
+
+    /// <summary>
+    /// Re-latches the launch pose on the current frame and forces a re-seed. Call once
+    /// AR tracking is established and the phone has been held still — see
+    /// CalibrationScreen. The frame-1 capture is taken before the session origin has
+    /// settled, so this is the more trustworthy of the two.
+    ///
+    /// Deliberately a method the platform layer calls rather than an SDK query in
+    /// here: GeoAnchor only ever touches Camera.main, so it works unchanged on any
+    /// tracker that can report a camera pose.
+    /// </summary>
+    public void RecaptureLaunchPose()
+    {
+        if (arCamera == null) arCamera = Camera.main;
+        if (arCamera == null) return;
+
+        launchYaw = arCamera.transform.eulerAngles.y;
+        launchPosition = arCamera.transform.position;
+        hasLaunchPose = true;
+
+        // Drop back to unseeded so TrySeed re-applies with the settled pose next frame.
+        hasSeededOnce = false;
+        IsAligned = false;
+
+        if (logCalibration)
+            Debug.Log($"[GeoAnchor] Launch pose re-latched at yaw {launchYaw:F1}deg.");
     }
 
     private void RecordPose()

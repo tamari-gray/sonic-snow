@@ -62,6 +62,14 @@ public class GameLogic : MonoBehaviour
             yield break;
         }
 
+        // Hold everything behind the calibration screen. Starting the search early
+        // would let the player trigger a race off an unsettled launch pose, which is
+        // the one thing the ritual exists to prevent.
+        if (CalibrationScreen.Instance != null)
+        {
+            yield return new WaitUntil(() => CalibrationScreen.Instance.IsReady);
+        }
+
         BeginSearchingForStart();
     }
 
