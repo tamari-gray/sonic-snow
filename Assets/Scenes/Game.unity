@@ -645,7 +645,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::LocationHandler
   desiredAccuracyMeters: 1
   updateDistanceMeters: 1
-  initTimeoutSeconds: 20
+  initTimeoutSeconds: 45
+  retryDelaySeconds: 3
+  maxInitAttempts: 0
   logUpdates: 1
 --- !u!4 &502365213
 Transform:

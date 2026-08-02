@@ -98,9 +98,7 @@ public class CalibrationScreen : MonoBehaviour
                 Line("AR tracking", tracking) + "\n" +
                 Line("Holding steady", steady) + "\n" +
                 Line("Route data", routeLoaded) + "\n" +
-                Line("GPS fix", gpsReady, location != null && location.IsReady
-                    ? $"±{location.HorizontalAccuracy:F0}m, need ±{requiredAccuracy:F0}m"
-                    : "waiting");
+                Line("GPS fix", gpsReady, GpsDetail(location));
         }
 
         if (!(tracking && steady && routeLoaded && gpsReady)) return;
@@ -176,6 +174,24 @@ public class CalibrationScreen : MonoBehaviour
         if (spinner == null) return;
 
         spinner.Rotate(0f, 0f, -spinnerDegreesPerSecond * Time.deltaTime);
+    }
+
+    /// <summary>
+    /// Says why GPS isn't ready yet. A bare spinner on a cold start looks identical to
+    /// a spinner on "location is switched off in settings", and only one of those is
+    /// something you can fix while standing on the hill.
+    /// </summary>
+    private string GpsDetail(LocationHandler location)
+    {
+        if (location == null) return "starting";
+
+        if (location.IsReady)
+            return $"±{location.HorizontalAccuracy:F0}m, need ±{requiredAccuracy:F0}m";
+
+        if (!string.IsNullOrEmpty(location.LastFailureReason))
+            return location.IsRetrying ? $"retrying — {location.LastFailureReason}" : location.LastFailureReason;
+
+        return "searching for satellites";
     }
 
     private static string Line(string label, bool done, string detail = null)

@@ -20,8 +20,15 @@ public class LocationHandler : MonoBehaviour
     [Tooltip("Minimum distance (meters) the device must move before an update fires.")]
     [SerializeField] private float updateDistanceMeters = 1f;
 
-    [Tooltip("How long to wait for GPS to initialize before giving up.")]
-    [SerializeField] private float initTimeoutSeconds = 20f;
+    [Tooltip("How long to wait for a fix before retrying. A cold start with no cached almanac " +
+             "can take 30-60s; a warm one is usually a few seconds.")]
+    [SerializeField] private float initTimeoutSeconds = 45f;
+
+    [Tooltip("Pause between attempts, in seconds.")]
+    [SerializeField] private float retryDelaySeconds = 3f;
+
+    [Tooltip("Attempts before giving up. 0 = keep trying indefinitely.")]
+    [SerializeField] private int maxInitAttempts = 0;
 
     [Header("Debug")]
     [SerializeField] private bool logUpdates = false;
@@ -33,6 +40,12 @@ public class LocationHandler : MonoBehaviour
     public double CurrentAltitude { get; private set; }
     public float HorizontalAccuracy { get; private set; }
     public double LastTimestamp { get; private set; }
+
+    /// <summary>Why the last attempt failed, or null. Surfaced on the calibration screen.</summary>
+    public string LastFailureReason { get; private set; }
+
+    /// <summary>True while retrying. Lets UI distinguish "still trying" from "gave up".</summary>
+    public bool IsRetrying { get; private set; }
 
     // --- Events ---
     /// <summary>Fires every time a new GPS reading comes in (lat, lng).</summary>
@@ -80,15 +93,49 @@ public class LocationHandler : MonoBehaviour
 
             if (!Permission.HasUserAuthorizedPermission(Permission.FineLocation))
             {
-                Fail("Location permission denied by user.");
+                // Terminal — no amount of retrying helps until the user grants it.
+                Fail("Location permission denied. Grant it in Android settings, then relaunch.");
                 yield break;
             }
         }
 #endif
 
+        // Keep retrying rather than dying on the first miss. A cold GPS start can
+        // easily exceed the timeout, and with a relaunch-per-run workflow a single
+        // permanent failure costs a whole run.
+        int attempt = 0;
+
+        while (maxInitAttempts <= 0 || attempt < maxInitAttempts)
+        {
+            attempt++;
+            IsRetrying = attempt > 1;
+
+            yield return StartCoroutine(TryStartLocationService());
+
+            if (IsReady)
+            {
+                IsRetrying = false;
+                LastFailureReason = null;
+                Debug.Log($"[LocationHandler] GPS fix acquired on attempt {attempt}.");
+                yield break;
+            }
+
+            Debug.LogWarning($"[LocationHandler] Attempt {attempt} failed ({LastFailureReason}). " +
+                             $"Retrying in {retryDelaySeconds:F0}s.");
+
+            yield return new WaitForSeconds(retryDelaySeconds);
+        }
+
+        IsRetrying = false;
+        Fail($"GPS gave up after {attempt} attempts. Last reason: {LastFailureReason}");
+    }
+
+    private IEnumerator TryStartLocationService()
+    {
         if (!Input.location.isEnabledByUser)
         {
-            Fail("Location services disabled by user (check device settings).");
+            // Not terminal — the user can flip it on in settings and the next attempt picks it up.
+            Note("Location services switched off in device settings.");
             yield break;
         }
 
@@ -101,20 +148,19 @@ public class LocationHandler : MonoBehaviour
             yield return null;
         }
 
-        if (Input.location.status == LocationServiceStatus.Failed)
+        if (Input.location.status == LocationServiceStatus.Running)
         {
-            Fail("Location service failed to initialize.");
+            ReadLocation(firstFix: true);
             yield break;
         }
 
-        if (Input.location.status != LocationServiceStatus.Running)
-        {
-            Fail($"Location service did not start in time (status: {Input.location.status}).");
-            yield break;
-        }
+        Note(Input.location.status == LocationServiceStatus.Failed
+            ? "Location service failed to initialize."
+            : $"No fix within {initTimeoutSeconds:F0}s (status: {Input.location.status}).");
 
-        // We have a running service — pull the first reading immediately.
-        ReadLocation(firstFix: true);
+        // Stop before retrying, otherwise the next Start() call is a no-op on a
+        // service that's already wedged in Initializing.
+        Input.location.Stop();
     }
 
     private void Update()
@@ -157,10 +203,18 @@ public class LocationHandler : MonoBehaviour
         }
     }
 
+    /// <summary>Transient failure — recorded, will be retried.</summary>
+    private void Note(string reason)
+    {
+        LastFailureReason = reason;
+    }
+
+    /// <summary>Terminal failure — we've stopped trying.</summary>
     private void Fail(string reason)
     {
         IsReady = false;
-        Debug.LogWarning($"[LocationHandler] {reason}");
+        LastFailureReason = reason;
+        Debug.LogError($"[LocationHandler] {reason}");
         OnLocationFailed?.Invoke(reason);
     }
 
