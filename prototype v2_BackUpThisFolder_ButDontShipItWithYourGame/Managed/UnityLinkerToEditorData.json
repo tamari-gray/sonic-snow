@@ -943,17 +943,13 @@
         "dependencies": [
           {
             "name": "ParticleSystem",
-            "scenes": [
-              "Assets/Scenes/Game.unity"
-            ],
+            "scenes": [],
             "dependencyType": 0,
             "icon": null
           },
           {
             "name": "ParticleSystemRenderer",
-            "scenes": [
-              "Assets/Scenes/Game.unity"
-            ],
+            "scenes": [],
             "dependencyType": 0,
             "icon": null
           }
@@ -992,9 +988,7 @@
           },
           {
             "name": "MeshCollider",
-            "scenes": [
-              "Assets/Scenes/Game.unity"
-            ],
+            "scenes": [],
             "dependencyType": 0,
             "icon": null
           },
