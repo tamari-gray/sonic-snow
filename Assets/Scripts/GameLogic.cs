@@ -32,10 +32,17 @@ public class GameLogic : MonoBehaviour
     [Tooltip("How close to the finish coord ends the race, in metres.")]
     [SerializeField] private float finishProximityRadius = 10f;
 
-    [Tooltip("Don't trigger the start on a fix worse than this, in metres. A 25m-accuracy fix " +
-             "can read as 'at the gate' from well down the route. Raise it for tight urban testing " +
-             "where accuracy rarely gets under 10m.")]
-    [SerializeField] private float maxTriggerAccuracy = 10f;
+    [Tooltip("Don't trigger the start on a fix worse than this, in metres. Must stay comfortably " +
+             "below the distance from start to finish, or a sloppy fix can read as 'at the gate' " +
+             "from down the route. 20m suits street testing, where accuracy rarely beats 10m; " +
+             "tighten it on an open slope.")]
+    [SerializeField] private float maxTriggerAccuracy = 20f;
+
+    [Tooltip("Seconds between proximity log lines. The on-screen log only keeps a handful of rows, " +
+             "so logging this every frame buries the GeoAnchor and spawn messages you actually need.")]
+    [SerializeField] private float proximityLogInterval = 1f;
+
+    private float lastProximityLogTime = float.NegativeInfinity;
 
     private const string LEADERBOARD_URL = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 
@@ -48,13 +55,13 @@ public class GameLogic : MonoBehaviour
     {
         Debug.Log("✔ GameLogic Start ACTIVE");
 
-        yield return StartCoroutine(MapDataFetcher.Instance.LoadRouteConfig());
-
         if (MapDataFetcher.Instance == null)
         {
-            Debug.Log("Mapdata fetcher is null my dude");
+            Debug.LogError("No MapDataFetcher in the scene — nothing can be placed without a route.");
             yield break;
         }
+
+        yield return StartCoroutine(MapDataFetcher.Instance.LoadRouteConfig());
 
         if (!MapDataFetcher.Instance.IsLoaded)
         {
@@ -97,13 +104,22 @@ public class GameLogic : MonoBehaviour
         currentLng = LocationHandler.Instance.CurrentLongitude;
     }
 
+    /// <summary>Rate-limits the proximity lines so they don't flush everything else off the HUD.</summary>
+    private bool ShouldLogProximity()
+    {
+        if (Time.unscaledTime - lastProximityLogTime < proximityLogInterval) return false;
+
+        lastProximityLogTime = Time.unscaledTime;
+        return true;
+    }
+
     private void CheckStartLineProximity()
     {
         if (LocationHandler.Instance == null || !LocationHandler.Instance.IsReady) return;
 
         if (MapDataFetcher.Instance == null || !MapDataFetcher.Instance.IsLoaded)
         {
-            Debug.Log("Mapdata fetcher is not loaded");
+            if (ShouldLogProximity()) Debug.Log("Route config not loaded yet — can't check the start line");
             return;
         }
 
@@ -112,15 +128,20 @@ public class GameLogic : MonoBehaviour
         float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.originLat, config.originLng);
 
         // Everything you need to diagnose a failed start, on one line in the on-screen log.
-        Debug.Log($"Start line {distance:F1}m away | GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | " +
-                  $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
+        if (ShouldLogProximity())
+        {
+            Debug.Log($"Start line {distance:F1}m away (need <{startProximityRadius:F0}m) | " +
+                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m (need <{maxTriggerAccuracy:F0}m) | " +
+                      $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
+        }
 
         if (distance > startProximityRadius) return;
 
         if (LocationHandler.Instance.HorizontalAccuracy > maxTriggerAccuracy)
         {
-            Debug.Log($"At the start line but the fix is only good to " +
-                      $"{LocationHandler.Instance.HorizontalAccuracy:F1}m — waiting for a better one");
+            if (ShouldLogProximity())
+                Debug.Log($"At the start line but the fix is only good to " +
+                          $"{LocationHandler.Instance.HorizontalAccuracy:F1}m — waiting for a better one");
             return;
         }
 
@@ -161,8 +182,12 @@ public class GameLogic : MonoBehaviour
         // estimate that converges during the run; GPS is the source of truth.
         float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.finishLat, config.finishLng);
 
-        Debug.Log($"Finish line {distance:F1}m away | GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | " +
-                  $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
+        if (ShouldLogProximity())
+        {
+            Debug.Log($"Finish line {distance:F1}m away (need <{finishProximityRadius:F0}m) | " +
+                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | " +
+                      $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
+        }
 
         if (distance <= finishProximityRadius)
         {

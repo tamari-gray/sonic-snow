@@ -49,6 +49,11 @@ public class CalibrationScreen : MonoBehaviour
     [Tooltip("Proceed anyway after this long, so a demo can never hang on the steadiness check.")]
     [SerializeField] private float steadyTimeoutSeconds = 12f;
 
+    [Tooltip("Proceed regardless after this long, in seconds. The steadiness check has its own " +
+             "timeout but AR tracking and GPS don't, so without this a denied camera permission " +
+             "or a bad fix leaves the player stuck on this screen with no way past it. 0 disables.")]
+    [SerializeField] private float overallTimeoutSeconds = 45f;
+
     [Tooltip("How long to leave the 'calibrated' confirmation up before hiding, in seconds.")]
     [SerializeField] private float confirmationSeconds = 1.2f;
 
@@ -56,6 +61,7 @@ public class CalibrationScreen : MonoBehaviour
     public bool IsReady { get; private set; }
 
     private float steadyTimer;
+    private float elapsedOnScreen;
     private float elapsedSinceTracking;
     private float lastYaw;
     private bool hasLastYaw;
@@ -101,7 +107,19 @@ public class CalibrationScreen : MonoBehaviour
                 Line("GPS fix", gpsReady, GpsDetail(location));
         }
 
-        if (!(tracking && steady && routeLoaded && gpsReady)) return;
+        elapsedOnScreen += Time.deltaTime;
+
+        bool timedOut = overallTimeoutSeconds > 0f && elapsedOnScreen >= overallTimeoutSeconds;
+
+        if (!(tracking && steady && routeLoaded && gpsReady))
+        {
+            if (!timedOut) return;
+
+            Debug.LogWarning($"[CalibrationScreen] Timed out after {overallTimeoutSeconds:F0}s and " +
+                             $"proceeding anyway. tracking={tracking} steady={steady} " +
+                             $"route={routeLoaded} gps={gpsReady}. Placement will be rough, and if " +
+                             $"GPS never arrives the start line won't trigger at all.");
+        }
 
         // Everything is up and the phone has been still for a moment. Latch the
         // session origin now, on a settled pose, rather than on whatever frame 1 was.

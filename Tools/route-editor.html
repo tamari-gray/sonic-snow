@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Sonic Snow — Route Editor</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  :root {
+    --bg: #0f1216;
+    --panel: #171c22;
+    --panel-2: #1e242c;
+    --line: #2a323c;
+    --text: #e6ebf2;
+    --muted: #8d99a8;
+    --start: #34d399;
+    --finish: #f87171;
+    --check: #60a5fa;
+    --warn: #fbbf24;
+    --accent: #7c9cff;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f2f5f9; --panel: #ffffff; --panel-2: #f7f9fc; --line: #dde3ec;
+      --text: #121821; --muted: #5c6879;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 14px; background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .01em; }
+  header .sp { flex: 1; }
+
+  #main { flex: 1; display: flex; min-height: 0; }
+  #map { flex: 1; min-width: 0; background: var(--panel-2); }
+
+  #side {
+    width: 340px; flex-shrink: 0; background: var(--panel);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+
+  @media (max-width: 860px) {
+    #main { flex-direction: column; }
+    #side { width: auto; height: 46%; border-left: none; border-top: 1px solid var(--line); }
+  }
+
+  .sec { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .sec h2 {
+    margin: 0 0 9px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .07em; color: var(--muted);
+  }
+
+  button {
+    font: inherit; font-weight: 550; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 8px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+    transition: background .12s, border-color .12s, transform .06s;
+  }
+  button:hover:not(:disabled) { background: var(--line); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .42; cursor: not-allowed; }
+
+  button.on { border-color: currentColor; }
+  button.start.on { color: var(--start); background: color-mix(in srgb, var(--start) 16%, transparent); }
+  button.finish.on { color: var(--finish); background: color-mix(in srgb, var(--finish) 16%, transparent); }
+  button.check.on { color: var(--check); background: color-mix(in srgb, var(--check) 16%, transparent); }
+
+  button.primary {
+    background: var(--accent); border-color: var(--accent); color: #0b1020; font-weight: 700;
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row.tight { gap: 6px; }
+  .grow { flex: 1; }
+
+  /* map pins — divIcon so no external image requests */
+  .pin {
+    width: 26px; height: 26px; border-radius: 50% 50% 50% 2px;
+    transform: rotate(-45deg); border: 2px solid rgba(0,0,0,.35);
+    box-shadow: 0 2px 8px rgba(0,0,0,.45);
+    display: grid; place-items: center;
+  }
+  .pin span {
+    transform: rotate(45deg); font-size: 11px; font-weight: 800; color: #0b1020;
+  }
+  .pin.s { background: var(--start); }
+  .pin.f { background: var(--finish); }
+  .pin.c { background: var(--check); }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td { padding: 4px 0; vertical-align: top; }
+  td.k { color: var(--muted); white-space: nowrap; padding-right: 10px; }
+  td.v { text-align: right; font-weight: 600; }
+
+  ol.cps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  ol.cps li {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 9px;
+  }
+  ol.cps .n {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--check);
+    color: #0b1020; font-size: 11px; font-weight: 800;
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  ol.cps .co { flex: 1; min-width: 0; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  ol.cps button { padding: 3px 7px; font-size: 12px; border-radius: 6px; }
+
+  .msg { padding: 8px 10px; border-radius: 8px; font-size: 12.5px; margin-bottom: 8px; }
+  .msg.warn { background: color-mix(in srgb, var(--warn) 15%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); }
+  .msg.err  { background: color-mix(in srgb, var(--finish) 15%, transparent); border: 1px solid color-mix(in srgb, var(--finish) 45%, transparent); }
+  .msg.ok   { background: color-mix(in srgb, var(--start) 15%, transparent); border: 1px solid color-mix(in srgb, var(--start) 45%, transparent); }
+
+  pre {
+    margin: 0; padding: 10px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; font-size: 11px; line-height: 1.45; overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    max-height: 210px; overflow-y: auto; white-space: pre;
+  }
+
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+  .hint b { color: var(--text); font-weight: 650; }
+
+  label.chk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+  label.chk input { accent-color: var(--accent); width: 15px; height: 15px; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(120%);
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    padding: 11px 17px; border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    transition: transform .22s cubic-bezier(.2,.8,.2,1); z-index: 9999;
+    max-width: min(90vw, 460px); font-size: 13px;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.err { border-color: var(--finish); }
+  #toast.ok { border-color: var(--start); }
+
+  .leaflet-container { font: inherit; background: var(--panel-2); }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <h1>Sonic Snow · Route Editor</h1>
+    <div class="sp"></div>
+    <div class="row tight">
+      <button id="btnLocate" title="Centre the map on your current position">Locate me</button>
+      <button id="btnLoad" title="Load the route currently live in Firebase">Load current</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <div id="map"></div>
+
+    <aside id="side">
+
+      <div class="sec">
+        <h2>Place points</h2>
+        <p class="hint">Pick a mode, then tap the map. Drag any pin to nudge it.</p>
+        <div class="row">
+          <button id="mStart"  class="start grow"><i class="dot" style="background:var(--start)"></i>Start line</button>
+          <button id="mFinish" class="finish grow"><i class="dot" style="background:var(--finish)"></i>Finish line</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="mCheck" class="check grow"><i class="dot" style="background:var(--check)"></i>Add checkpoints</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h2>Route</h2>
+        <div id="validation"></div>
+        <table id="stats"></table>
+      </div>
+
+      <div class="sec">
+        <h2>Checkpoints (<span id="cpCount">0</span>)</h2>
+        <ol class="cps" id="cpList"></ol>
+        <p class="hint" id="cpEmpty" style="margin:0">None yet. Checkpoints are ridden through in order.</p>
+      </div>
+
+      <div class="sec">
+        <h2>Altitude</h2>
+        <label class="chk">
+          <input type="checkbox" id="useAlt">
+          Fetch ground elevation for each point
+        </label>
+        <div class="row" style="margin-top:9px">
+          <button id="btnElev" class="grow">Check elevations</button>
+        </div>
+        <div id="elevOut"></div>
+        <p class="hint" style="margin:8px 0 0">
+          Terrain data on a ~30&nbsp;m grid, quantised to whole metres. Good on a real
+          slope, misleading on flat ground. Unchecked sends zeros and the game places
+          everything flat at start&#8209;gate height &mdash; which is correct for a flat route.
+        </p>
+      </div>
+
+      <div class="sec">
+        <h2>Payload</h2>
+        <pre id="json">—</pre>
+      </div>
+
+      <div class="sec">
+        <div class="row">
+          <button id="btnClear">Clear all</button>
+          <button id="btnSubmit" class="primary grow" disabled>Push to Firebase</button>
+        </div>
+        <p class="hint" style="margin:9px 0 0">
+          Sends a <b>PATCH</b> to the database root, so the leaderboard is left untouched.
+          The existing route is overwritten.
+        </p>
+      </div>
+
+    </aside>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ config */
+
+const DB_ROOT   = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/.json";
+const ELEV_API  = "https://api.open-meteo.com/v1/elevation";
+
+// Matches DEMO-GUIDE.md: closer than this and the finish trigger fires as the
+// countdown ends, because GameLogic's start and finish radii are 10 m each.
+const MIN_ROUTE_LENGTH_M = 25;
+
+// Coordinates are stored to ~1 mm. More precision than this is noise.
+const COORD_DP = 8;
+
+/* ------------------------------------------------------------------- state */
+
+const state = {
+  mode: null,          // 'start' | 'finish' | 'check' | null
+  start: null,         // {lat, lng, alt}
+  finish: null,
+  checkpoints: [],
+};
+
+let map, routeLine;
+const markers = { start: null, finish: null, checkpoints: [] };
+
+/* -------------------------------------------------------------- geo helpers */
+/* Formulas mirror Assets/Scripts/GpsUtils.cs so the numbers here match the game. */
+
+const R_EARTH = 6371000;
+const rad = d => d * Math.PI / 180;
+const deg = r => r * 180 / Math.PI;
+
+function haversine(a, b) {
+  const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+  const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return R_EARTH * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+}
+
+function bearing(a, b) {
+  const dLng = rad(b.lng - a.lng);
+  const y = Math.sin(dLng) * Math.cos(rad(b.lat));
+  const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) -
+            Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(dLng);
+  return (deg(Math.atan2(y, x)) + 360) % 360;
+}
+
+const round = n => Number(n.toFixed(COORD_DP));
+
+/* ----------------------------------------------------------------- map init */
+
+function initMap() {
+  map = L.map("map", { zoomControl: true, doubleClickZoom: false })
+         .setView([-45.0286, 168.6873], 17);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(map);
+
+  routeLine = L.polyline([], { color: "#7c9cff", weight: 3, opacity: .85, dashArray: "6 6" }).addTo(map);
+
+  map.on("click", e => {
+    if (!state.mode) return;
+    const p = { lat: round(e.latlng.lat), lng: round(e.latlng.lng), alt: 0 };
+
+    if (state.mode === "start")  { state.start  = p; setMode(null); }
+    if (state.mode === "finish") { state.finish = p; setMode(null); }
+    if (state.mode === "check")  { state.checkpoints.push(p); }   // stays armed for more
+
+    render();
+  });
+}
+
+function pin(kind, label) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="pin ${kind}"><span>${label}</span></div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
+  });
+}
+
+/* ------------------------------------------------------------------- render */
+
+function render() {
+  drawMarkers();
+  drawRoute();
+  drawStats();
+  drawCheckpointList();
+  drawJson();
+}
+
+function drawMarkers() {
+  // Start
+  if (state.start) {
+    if (!markers.start) {
+      markers.start = L.marker([state.start.lat, state.start.lng], {
+        icon: pin("s", "S"), draggable: true,
+      }).addTo(map).on("dragend", ev => {
+        const ll = ev.target.getLatLng();
+        state.start.lat = round(ll.lat); state.start.lng = round(ll.lng);
+        state.start.alt = 0;
+        render();
+      });
+    } else {
+      markers.start.setLatLng([state.start.lat, state.start.lng]);
+    }
+  } else if (markers.start) {
+    map.removeLayer(markers.start); markers.start = null;
+  }
+
+  // Finish
+  if (state.finish) {
+    if (!markers.finish) {
+      markers.finish = L.marker([state.finish.lat, state.finish.lng], {
+        icon: pin("f", "F"), draggable: true,
+      }).addTo(map).on("dragend", ev => {
+        const ll = ev.target.getLatLng();
+        state.finish.lat = round(ll.lat); state.finish.lng = round(ll.lng);
+        state.finish.alt = 0;
+        render();
+      });
+    } else {
+      markers.finish.setLatLng([state.finish.lat, state.finish.lng]);
+    }
+  } else if (markers.finish) {
+    map.removeLayer(markers.finish); markers.finish = null;
+  }
+
+  // Checkpoints — rebuilt wholesale because indices shift on delete/reorder
+  markers.checkpoints.forEach(m => map.removeLayer(m));
+  markers.checkpoints = state.checkpoints.map((cp, i) =>
+    L.marker([cp.lat, cp.lng], { icon: pin("c", String(i + 1)), draggable: true })
+      .addTo(map)
+      .on("dragend", ev => {
+        const ll = ev.target.getLatLng();
+        state.checkpoints[i].lat = round(ll.lat);
+        state.checkpoints[i].lng = round(ll.lng);
+        state.checkpoints[i].alt = 0;
+        render();
+      })
+  );
+}
+
+function orderedPoints() {
+  return [state.start, ...state.checkpoints, state.finish].filter(Boolean);
+}
+
+function drawRoute() {
+  routeLine.setLatLngs(orderedPoints().map(p => [p.lat, p.lng]));
+}
+
+function drawStats() {
+  const t = document.getElementById("stats");
+  const rows = [];
+
+  if (state.start && state.finish) {
+    const d = haversine(state.start, state.finish);
+    const b = bearing(state.start, state.finish);
+    rows.push(["Start → finish", `${d.toFixed(1)} m`]);
+    rows.push(["Bearing", `${b.toFixed(1)}°`]);
+  }
+
+  const pts = orderedPoints();
+  if (pts.length > 1) {
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) total += haversine(pts[i - 1], pts[i]);
+    rows.push(["Path length", `${total.toFixed(1)} m`]);
+  }
+
+  rows.push(["Checkpoints", String(state.checkpoints.length)]);
+
+  t.innerHTML = rows.map(([k, v]) =>
+    `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`).join("")
+    || `<tr><td class="k">Nothing placed yet</td></tr>`;
+}
+
+function drawCheckpointList() {
+  const list = document.getElementById("cpList");
+  const empty = document.getElementById("cpEmpty");
+
+  document.getElementById("cpCount").textContent = String(state.checkpoints.length);
+  empty.style.display = state.checkpoints.length ? "none" : "block";
+
+  list.innerHTML = state.checkpoints.map((cp, i) => `
+    <li>
+      <span class="n">${i + 1}</span>
+      <span class="co">${cp.lat.toFixed(6)}, ${cp.lng.toFixed(6)}</span>
+      <button data-up="${i}"   ${i === 0 ? "disabled" : ""} title="Move earlier">↑</button>
+      <button data-down="${i}" ${i === state.checkpoints.length - 1 ? "disabled" : ""} title="Move later">↓</button>
+      <button data-del="${i}"  title="Delete">✕</button>
+    </li>`).join("");
+
+  list.querySelectorAll("[data-del]").forEach(b => b.onclick = () => {
+    state.checkpoints.splice(+b.dataset.del, 1); render();
+  });
+  list.querySelectorAll("[data-up]").forEach(b => b.onclick = () => {
+    const i = +b.dataset.up;
+    [state.checkpoints[i - 1], state.checkpoints[i]] = [state.checkpoints[i], state.checkpoints[i - 1]];
+    render();
+  });
+  list.querySelectorAll("[data-down]").forEach(b => b.onclick = () => {
+    const i = +b.dataset.down;
+    [state.checkpoints[i + 1], state.checkpoints[i]] = [state.checkpoints[i], state.checkpoints[i + 1]];
+    render();
+  });
+}
+
+/* --------------------------------------------------------------- validation */
+
+function validate() {
+  const problems = [];
+
+  if (!state.start)  problems.push({ level: "err",  text: "No start line placed." });
+  if (!state.finish) problems.push({ level: "err",  text: "No finish line placed." });
+
+  if (state.start && state.finish) {
+    const d = haversine(state.start, state.finish);
+
+    if (d < MIN_ROUTE_LENGTH_M) {
+      problems.push({
+        level: "err",
+        text: `Start and finish are only ${d.toFixed(1)} m apart. The game's start and
+               finish radii are 10 m each, so under ~${MIN_ROUTE_LENGTH_M} m the race ends
+               the instant the countdown does.`,
+      });
+    }
+
+    // A checkpoint should sit between the endpoints. Flag any that is further from
+    // the start than the finish is — usually a mis-tap or a bad paste.
+    state.checkpoints.forEach((cp, i) => {
+      if (haversine(state.start, cp) > d * 1.35) {
+        problems.push({
+          level: "warn",
+          text: `Checkpoint ${i + 1} is further from the start than the finish is. Off-route?`,
+        });
+      }
+    });
+  }
+
+  return problems;
+}
+
+function drawValidation() {
+  const box = document.getElementById("validation");
+  const problems = validate();
+  const blocking = problems.some(p => p.level === "err");
+
+  document.getElementById("btnSubmit").disabled = blocking;
+
+  if (!problems.length) {
+    box.innerHTML = state.start && state.finish
+      ? `<div class="msg ok">Route looks good.</div>` : "";
+    return;
+  }
+
+  box.innerHTML = problems
+    .map(p => `<div class="msg ${p.level}">${p.text}</div>`).join("");
+}
+
+/* ------------------------------------------------------------------ payload */
+
+function buildPayload(withAlt) {
+  return {
+    originLat: state.start.lat,
+    originLng: state.start.lng,
+    originAlt: withAlt ? state.start.alt : 0,
+    finishLat: state.finish.lat,
+    finishLng: state.finish.lng,
+    finishAlt: withAlt ? state.finish.alt : 0,
+    checkpoints: state.checkpoints.map(cp => ({
+      lat: cp.lat,
+      lng: cp.lng,
+      alt: withAlt ? cp.alt : 0,
+    })),
+  };
+}
+
+function drawJson() {
+  drawValidation();
+
+  const el = document.getElementById("json");
+
+  if (!state.start || !state.finish) {
+    el.textContent = "Place a start and a finish to see the payload.";
+    return;
+  }
+
+  el.textContent = JSON.stringify(buildPayload(document.getElementById("useAlt").checked), null, 2);
+}
+
+/* ---------------------------------------------------------------- elevation */
+
+async function fetchElevations() {
+  const pts = orderedPoints();
+  if (!pts.length) return;
+
+  const url = `${ELEV_API}?latitude=${pts.map(p => p.lat).join(",")}` +
+              `&longitude=${pts.map(p => p.lng).join(",")}`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`elevation API returned ${res.status}`);
+
+  const data = await res.json();
+  if (!Array.isArray(data.elevation) || data.elevation.length !== pts.length) {
+    throw new Error("elevation API returned an unexpected shape");
+  }
+
+  // orderedPoints() is [start, ...checkpoints, finish] — same order we sent.
+  pts.forEach((p, i) => { p.alt = Number(data.elevation[i]); });
+}
+
+/**
+ * Shows what the terrain API actually returned, and whether it's trustworthy.
+ *
+ * The API samples a ~30 m grid and rounds to whole metres. Over a short route on
+ * flat ground that quantisation is the entire signal — an 88 m street came back
+ * with a 4 m "drop" that doesn't exist. Feeding that to the game plants the finish
+ * beam metres in the air, so it's worth seeing the numbers before pushing them.
+ */
+async function checkElevations() {
+  const box = document.getElementById("elevOut");
+  const btn = document.getElementById("btnElev");
+
+  if (!state.start || !state.finish) {
+    box.innerHTML = `<div class="msg warn">Place a start and a finish first.</div>`;
+    return;
+  }
+
+  btn.disabled = true;
+  box.innerHTML = `<div class="msg">Fetching…</div>`;
+
+  try {
+    await fetchElevations();
+
+    const pts = orderedPoints();
+    const alts = pts.map(p => p.alt);
+    const spread = Math.max(...alts) - Math.min(...alts);
+    const drop = state.start.alt - state.finish.alt;
+
+    let verdict;
+    if (spread < 15) {
+      verdict = `<div class="msg warn">
+        Only ${spread} m of relief across the whole route. At this scale the terrain
+        grid's own rounding is as large as the signal, so these numbers are mostly
+        noise. Leave altitudes <b>off</b> — flat placement will be more accurate.
+      </div>`;
+      document.getElementById("useAlt").checked = false;
+    } else {
+      verdict = `<div class="msg ok">
+        ${Math.abs(drop).toFixed(0)} m of ${drop > 0 ? "descent" : "climb"} start to finish.
+        Enough relief for altitudes to be worth using.
+      </div>`;
+      document.getElementById("useAlt").checked = true;
+    }
+
+    box.innerHTML = verdict +
+      `<pre style="max-height:120px">${alts.map((a, i) =>
+        `${(i === 0 ? "start" : i === alts.length - 1 ? "finish" : "cp " + i).padEnd(7)} ${a} m`
+      ).join("\n")}</pre>`;
+
+    drawJson();
+  } catch (e) {
+    box.innerHTML = `<div class="msg err">Elevation lookup failed: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ------------------------------------------------------------------ actions */
+
+function setMode(mode) {
+  state.mode = state.mode === mode ? null : mode;
+
+  for (const [id, m] of [["mStart", "start"], ["mFinish", "finish"], ["mCheck", "check"]]) {
+    document.getElementById(id).classList.toggle("on", state.mode === m);
+  }
+
+  map.getContainer().style.cursor = state.mode ? "crosshair" : "";
+}
+
+function toast(text, kind = "") {
+  const el = document.getElementById("toast");
+  el.textContent = text;
+  el.className = `show ${kind}`;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.className = ""; }, kind === "err" ? 7000 : 3600);
+}
+
+async function loadCurrent() {
+  try {
+    const res = await fetch(DB_ROOT);
+    if (!res.ok) throw new Error(`Firebase returned ${res.status}`);
+
+    const d = await res.json();
+    if (!d || d.originLat == null || d.finishLat == null) {
+      toast("No route found in the database.", "err");
+      return;
+    }
+
+    state.start  = { lat: d.originLat, lng: d.originLng, alt: d.originAlt || 0 };
+    state.finish = { lat: d.finishLat, lng: d.finishLng, alt: d.finishAlt || 0 };
+    state.checkpoints = (d.checkpoints || [])
+      .filter(Boolean)
+      .map(c => ({ lat: c.lat, lng: c.lng, alt: c.alt || 0 }));
+
+    render();
+    map.fitBounds(L.latLngBounds(orderedPoints().map(p => [p.lat, p.lng])), { padding: [60, 60] });
+
+    toast(`Loaded route with ${state.checkpoints.length} checkpoint(s).`, "ok");
+  } catch (e) {
+    toast(`Couldn't load: ${e.message}`, "err");
+  }
+}
+
+async function submit() {
+  const btn = document.getElementById("btnSubmit");
+  const withAlt = document.getElementById("useAlt").checked;
+
+  const d = haversine(state.start, state.finish);
+  const ok = confirm(
+    `Overwrite the live route?\n\n` +
+    `  Start → finish : ${d.toFixed(1)} m at ${bearing(state.start, state.finish).toFixed(0)}°\n` +
+    `  Checkpoints    : ${state.checkpoints.length}\n` +
+    `  Altitudes      : ${withAlt ? "fetched from terrain data" : "zeroed (flat placement)"}\n\n` +
+    `The leaderboard is not affected.`
+  );
+  if (!ok) return;
+
+  btn.disabled = true;
+  const label = btn.textContent;
+
+  try {
+    if (withAlt) {
+      btn.textContent = "Fetching elevations…";
+      await fetchElevations();
+      drawJson();
+    }
+
+    btn.textContent = "Pushing…";
+
+    // PATCH, not PUT: PUT at the root would delete the leaderboard, since it
+    // replaces the entire node rather than merging the keys we send.
+    const res = await fetch(DB_ROOT, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload(withAlt)),
+    });
+
+    if (!res.ok) throw new Error(`Firebase returned ${res.status}: ${await res.text()}`);
+
+    toast("Route pushed. Relaunch the app to pick it up.", "ok");
+  } catch (e) {
+    toast(`Push failed: ${e.message}`, "err");
+  } finally {
+    btn.textContent = label;
+    drawValidation();
+  }
+}
+
+function clearAll() {
+  if (!confirm("Clear every point from the editor?\n\nThis only affects the editor — the live route is untouched until you push.")) return;
+  state.start = null; state.finish = null; state.checkpoints = [];
+  setMode(null);
+  render();
+}
+
+function locate() {
+  if (!navigator.geolocation) { toast("This browser has no geolocation.", "err"); return; }
+
+  navigator.geolocation.getCurrentPosition(
+    p => { map.setView([p.coords.latitude, p.coords.longitude], 18); toast("Centred on your position."); },
+    e => toast(`Couldn't locate you: ${e.message}`, "err"),
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+/* --------------------------------------------------------------------- boot */
+
+initMap();
+
+document.getElementById("mStart").onclick  = () => setMode("start");
+document.getElementById("mFinish").onclick = () => setMode("finish");
+document.getElementById("mCheck").onclick  = () => setMode("check");
+document.getElementById("btnLoad").onclick = loadCurrent;
+document.getElementById("btnClear").onclick = clearAll;
+document.getElementById("btnSubmit").onclick = submit;
+document.getElementById("btnLocate").onclick = locate;
+document.getElementById("btnElev").onclick = checkElevations;
+document.getElementById("useAlt").onchange = drawJson;
+
+render();
+</script>
+</body>
+</html>
