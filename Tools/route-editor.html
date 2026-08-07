@@ -39,28 +39,44 @@
     overflow: hidden;
   }
 
-  #app { display: flex; flex-direction: column; height: 100%; }
+  /* The map is the page. Everything else floats over it, so the map is never
+     boxed into a leftover column — and hiding the panel gives a clean full screen. */
+  #app { height: 100%; }
+  #main { display: contents; }
+
+  #map { position: fixed; inset: 0; z-index: 0; background: var(--panel-2); }
 
   header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1200;
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    padding: 10px 14px; background: var(--panel);
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--panel) 90%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
   }
   header h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: .01em; }
   header .sp { flex: 1; }
 
-  #main { flex: 1; display: flex; min-height: 0; }
-  #map { flex: 1; min-width: 0; background: var(--panel-2); }
-
   #side {
-    width: 340px; flex-shrink: 0; background: var(--panel);
+    position: fixed; z-index: 1100;
+    top: var(--hdr, 52px); right: 0; bottom: 0; width: 340px;
+    background: color-mix(in srgb, var(--panel) 93%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     border-left: 1px solid var(--line);
     display: flex; flex-direction: column; overflow-y: auto;
+    transition: transform .2s ease;
   }
+  body.panel-hidden #side { transform: translateX(101%); }
+
+  /* Keep Leaflet's own controls clear of the floating header. */
+  .leaflet-top .leaflet-control { margin-top: calc(var(--hdr, 52px) + 10px); }
 
   @media (max-width: 860px) {
-    #main { flex-direction: column; }
-    #side { width: auto; height: 46%; border-left: none; border-top: 1px solid var(--line); }
+    #side {
+      top: auto; left: 0; width: auto; height: 52%;
+      border-left: none; border-top: 1px solid var(--line);
+    }
+    body.panel-hidden #side { transform: translateY(101%); }
   }
 
   .sec { padding: 12px 14px; border-bottom: 1px solid var(--line); }
@@ -170,6 +186,7 @@
     <div class="row tight">
       <button id="btnLocate" title="Centre the map on your current position">Locate me</button>
       <button id="btnLoad" title="Load the route currently live in Firebase">Load current</button>
+      <button id="btnPanel" title="Collapse the panel for an unobstructed map">Hide panel</button>
     </div>
   </header>
 
@@ -227,7 +244,7 @@
       <div class="sec">
         <div class="row">
           <button id="btnClear">Clear all</button>
-          <button id="btnSubmit" class="primary grow" disabled>Push to Firebase</button>
+          <button id="btnSubmit" class="primary grow" disabled>Init map</button>
         </div>
         <p class="hint" style="margin:9px 0 0">
           Sends a <b>PATCH</b> to the database root, so the leaderboard is left untouched.
@@ -651,7 +668,7 @@ async function loadCurrent() {
       .map(c => ({ lat: c.lat, lng: c.lng, alt: c.alt || 0 }));
 
     render();
-    map.fitBounds(L.latLngBounds(orderedPoints().map(p => [p.lat, p.lng])), { padding: [60, 60] });
+    fitToRoute();
 
     toast(`Loaded route with ${state.checkpoints.length} checkpoint(s).`, "ok");
   } catch (e) {
@@ -711,6 +728,62 @@ function clearAll() {
   render();
 }
 
+/* The header wraps to two rows on a narrow window, so its height can't be a
+   constant — the panel and the zoom control both hang off it. */
+function syncHeaderHeight() {
+  const h = document.querySelector("header").offsetHeight;
+  document.documentElement.style.setProperty("--hdr", `${h}px`);
+}
+
+/**
+ * Watches the two elements whose size the layout depends on.
+ *
+ * Both need this for the same reason: the boot script runs during parse, and a
+ * measurement taken then can predate the final viewport — in an embedded preview
+ * pane it read the header as 342px instead of 59px, and Leaflet cached its
+ * container as 0x0 and rendered a single tile. A window 'resize' listener doesn't
+ * save you, because the settling layout pass doesn't always fire one.
+ * ResizeObserver invokes immediately on observe and again on every later change.
+ */
+function watchLayout() {
+  const resync = () => { syncHeaderHeight(); map.invalidateSize(); };
+
+  // Measure now, so the layout is right even if no observer callback ever lands.
+  resync();
+
+  new ResizeObserver(syncHeaderHeight).observe(document.querySelector("header"));
+  new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
+
+  // ResizeObserver delivery is tied to rendering frames, so a tab that isn't
+  // compositing never gets one — the layout would silently sit on its CSS
+  // fallbacks. 'load' also catches fonts and the Leaflet stylesheet landing late
+  // and changing the header's height after this script ran.
+  window.addEventListener("load", resync);
+}
+
+function togglePanel() {
+  const hidden = document.body.classList.toggle("panel-hidden");
+  document.getElementById("btnPanel").textContent = hidden ? "Show panel" : "Hide panel";
+}
+
+/** Frames the route in the part of the map the floating panel isn't covering. */
+function fitToRoute() {
+  const pts = orderedPoints();
+  if (!pts.length) return;
+
+  const header = document.querySelector("header").offsetHeight;
+  const panelShown = !document.body.classList.contains("panel-hidden");
+  const wide = window.innerWidth > 860;
+
+  map.fitBounds(L.latLngBounds(pts.map(p => [p.lat, p.lng])), {
+    paddingTopLeft: [60, header + 20],
+    paddingBottomRight: [
+      panelShown && wide ? 380 : 60,
+      panelShown && !wide ? Math.round(window.innerHeight * 0.55) : 60,
+    ],
+  });
+}
+
 function locate() {
   if (!navigator.geolocation) { toast("This browser has no geolocation.", "err"); return; }
 
@@ -733,7 +806,10 @@ document.getElementById("btnClear").onclick = clearAll;
 document.getElementById("btnSubmit").onclick = submit;
 document.getElementById("btnLocate").onclick = locate;
 document.getElementById("btnElev").onclick = checkElevations;
+document.getElementById("btnPanel").onclick = togglePanel;
 document.getElementById("useAlt").onchange = drawJson;
+
+watchLayout();
 
 render();
 </script>
