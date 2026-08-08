@@ -36,6 +36,7 @@ extern void U3CRunCountdownU3Ed__7_System_Collections_IEnumerator_Reset_mF5D929A
 extern void U3CRunCountdownU3Ed__7_System_Collections_IEnumerator_get_Current_mEB7E008806E926DF8B8849E722D3DEADA9E78F77 (void);
 extern void FinishLinePillar_Awake_m9C95125893FA6A5FD4717A9AC06A059125206D45 (void);
 extern void FinishLinePillar_SpawnPillar_mA15C6CC5E9C08A6B12A01FD09045D4F32F98C0A8 (void);
+extern void FinishLinePillar_FacingBackDownTheRun_m4094FA5F33071E92E6B821E46C6DE3FAFF39000F (void);
 extern void FinishLinePillar_ClearPillar_m6B948C0E9C9303C11F70450AE1601A3E1C1E2343 (void);
 extern void FinishLinePillar__ctor_mB8696750544840E7A2DABFCFF08FDBC34549DE7D (void);
 extern void GameLogic_get_CurrentState_mCC930543042E206213047886C6118D22232A1471 (void);
@@ -307,7 +308,7 @@ extern void U3CWaitUntilNextCardU3Ed__36_MoveNext_mEB6BA70FAED1CFCFF4A723EA3EAB8
 extern void U3CWaitUntilNextCardU3Ed__36_System_Collections_Generic_IEnumeratorU3CSystem_ObjectU3E_get_Current_mDB2315FB1F67F06B37604285AD8F003E282D1607 (void);
 extern void U3CWaitUntilNextCardU3Ed__36_System_Collections_IEnumerator_Reset_m5E5CC9DFDC8C17DB423A7C7ECBCD4342A7754633 (void);
 extern void U3CWaitUntilNextCardU3Ed__36_System_Collections_IEnumerator_get_Current_mE7D77BA338B271D9E95117683B19436CFFF37229 (void);
-static Il2CppMethodPointer s_methodPointers[306] = 
+static Il2CppMethodPointer s_methodPointers[307] = 
 {
 	NULL,
 	NULL,
@@ -344,6 +345,7 @@ static Il2CppMethodPointer s_methodPointers[306] =
 	U3CRunCountdownU3Ed__7_System_Collections_IEnumerator_get_Current_mEB7E008806E926DF8B8849E722D3DEADA9E78F77,
 	FinishLinePillar_Awake_m9C95125893FA6A5FD4717A9AC06A059125206D45,
 	FinishLinePillar_SpawnPillar_mA15C6CC5E9C08A6B12A01FD09045D4F32F98C0A8,
+	FinishLinePillar_FacingBackDownTheRun_m4094FA5F33071E92E6B821E46C6DE3FAFF39000F,
 	FinishLinePillar_ClearPillar_m6B948C0E9C9303C11F70450AE1601A3E1C1E2343,
 	FinishLinePillar__ctor_mB8696750544840E7A2DABFCFF08FDBC34549DE7D,
 	GameLogic_get_CurrentState_mCC930543042E206213047886C6118D22232A1471,
@@ -619,9 +621,9 @@ static Il2CppMethodPointer s_methodPointers[306] =
 extern void Goal__ctor_m4452076EE88E564D97BBDD12E7011CAF34E275A3_AdjustorThunk (void);
 static Il2CppTokenAdjustorThunkPair s_adjustorThunks[1] = 
 {
-	{ 0x06000117, Goal__ctor_m4452076EE88E564D97BBDD12E7011CAF34E275A3_AdjustorThunk },
+	{ 0x06000118, Goal__ctor_m4452076EE88E564D97BBDD12E7011CAF34E275A3_AdjustorThunk },
 };
-static const int32_t s_InvokerIndices[306] = 
+static const int32_t s_InvokerIndices[307] = 
 {
 	-1,
 	-1,
@@ -658,6 +660,7 @@ static const int32_t s_InvokerIndices[306] =
 	18105,
 	18323,
 	18323,
+	29704,
 	18323,
 	18323,
 	18029,
@@ -971,7 +974,7 @@ IL2CPP_EXTERN_C const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule;
 const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule = 
 {
 	"Assembly-CSharp.dll",
-	306,
+	307,
 	s_methodPointers,
 	1,
 	s_adjustorThunks,
