@@ -213,7 +213,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!114 &106063381
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -330,7 +330,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 783, y: -74}
+  m_AnchoredPosition: {x: 566.6, y: -74}
   m_SizeDelta: {x: 447.778, y: 75.19519}
   m_Pivot: {x: 0, y: 1}
 --- !u!1 &146326263
@@ -426,6 +426,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CheckpointDomeSpawner
   checkpointDomePrefab: {fileID: 1157951439072675487, guid: 5896c100741177347a4cd9a8ba2237a0, type: 3}
   verticalOffset: 0
+  collectRadius: 10
 --- !u!4 &336689858
 Transform:
   m_ObjectHideFlags: 0
@@ -472,6 +473,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameLogic
   usernameInputField: {fileID: 1715587412}
   playButton: {fileID: 1426910567}
+  startProximityRadius: 10
+  finishProximityRadius: 10
+  maxTriggerAccuracy: 20
+  proximityLogInterval: 1
 --- !u!4 &337142528
 Transform:
   m_ObjectHideFlags: 0
@@ -2525,7 +2530,6 @@ MonoBehaviour:
   maxHorizontalAccuracy: 8
   minSampleSpacing: 4
   maxSamples: 40
-  maxSeedAccuracy: 30
   maxFixLag: 2
   minSamples: 4
   minBaseline: 20

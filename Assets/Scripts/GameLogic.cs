@@ -97,6 +97,7 @@ public class GameLogic : MonoBehaviour
                 break;
 
             case GameState.Racing:
+                CheckCheckpointProximity();
                 CheckFinishLineProximity();
                 break;
         }
@@ -176,6 +177,18 @@ public class GameLogic : MonoBehaviour
         InitPlayerAndWorld();
     }
 
+    /// <summary>
+    /// Retires checkpoints as the rider rides through them. Racing-only, so walking past
+    /// one while still entering a username doesn't quietly consume it.
+    /// </summary>
+    private void CheckCheckpointProximity()
+    {
+        if (LocationHandler.Instance == null || !LocationHandler.Instance.IsReady) return;
+        if (CheckpointDomeSpawner.Instance == null) return;
+
+        CheckpointDomeSpawner.Instance.CheckProximity(currentLat, currentLng);
+    }
+
     private void CheckFinishLineProximity()
     {
         if (LocationHandler.Instance == null || !LocationHandler.Instance.IsReady) return;
@@ -190,8 +203,12 @@ public class GameLogic : MonoBehaviour
 
         if (ShouldLogProximity())
         {
+            CheckpointDomeSpawner domes = CheckpointDomeSpawner.Instance;
+            string checkpoints = domes != null && domes.Total > 0
+                ? $"CP {domes.CollectedCount}/{domes.Total} | " : "";
+
             Debug.Log($"Finish line {distance:F1}m away (need <{finishProximityRadius:F0}m) | " +
-                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | " +
+                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | {checkpoints}" +
                       $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
         }
 
