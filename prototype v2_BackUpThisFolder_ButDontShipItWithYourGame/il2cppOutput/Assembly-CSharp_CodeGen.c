@@ -19,6 +19,8 @@ extern void CalibrationScreen_SpinSpinner_m76EA9B6C7F3BF9CDF32029A7501EAC13ABB1B
 extern void CalibrationScreen_GpsDetail_m4F7D426000E369F0D4C9291CB9C340F8093F3FBC (void);
 extern void CalibrationScreen_Line_m35B60A6033EC122738E20EE7D89F6A2745A0F420 (void);
 extern void CalibrationScreen__ctor_mC6CCF6E1DB43F1D10A08B04956CEF13004571E66 (void);
+extern void CheckpointCounterUI_Update_m70947A09267C7C5731ECF29260B74F0473A6B372 (void);
+extern void CheckpointCounterUI__ctor_mFC642F14158B86CC896307ED5F877CCDAE89BED0 (void);
 extern void CheckpointDomeSpawner_get_Total_m6212C2FB2F68C878323CE3496729585F10AA2142 (void);
 extern void CheckpointDomeSpawner_get_CollectedCount_m6F818267B81856B7DA4C232ADB3EDC4E47EBE204 (void);
 extern void CheckpointDomeSpawner_set_CollectedCount_m381635EB200CC8FA236F8F912D270DE102419EA2 (void);
@@ -318,7 +320,7 @@ extern void U3CWaitUntilNextCardU3Ed__36_MoveNext_mEB6BA70FAED1CFCFF4A723EA3EAB8
 extern void U3CWaitUntilNextCardU3Ed__36_System_Collections_Generic_IEnumeratorU3CSystem_ObjectU3E_get_Current_mDB2315FB1F67F06B37604285AD8F003E282D1607 (void);
 extern void U3CWaitUntilNextCardU3Ed__36_System_Collections_IEnumerator_Reset_m5E5CC9DFDC8C17DB423A7C7ECBCD4342A7754633 (void);
 extern void U3CWaitUntilNextCardU3Ed__36_System_Collections_IEnumerator_get_Current_mE7D77BA338B271D9E95117683B19436CFFF37229 (void);
-static Il2CppMethodPointer s_methodPointers[317] = 
+static Il2CppMethodPointer s_methodPointers[319] = 
 {
 	NULL,
 	NULL,
@@ -338,6 +340,8 @@ static Il2CppMethodPointer s_methodPointers[317] =
 	CalibrationScreen_GpsDetail_m4F7D426000E369F0D4C9291CB9C340F8093F3FBC,
 	CalibrationScreen_Line_m35B60A6033EC122738E20EE7D89F6A2745A0F420,
 	CalibrationScreen__ctor_mC6CCF6E1DB43F1D10A08B04956CEF13004571E66,
+	CheckpointCounterUI_Update_m70947A09267C7C5731ECF29260B74F0473A6B372,
+	CheckpointCounterUI__ctor_mFC642F14158B86CC896307ED5F877CCDAE89BED0,
 	CheckpointDomeSpawner_get_Total_m6212C2FB2F68C878323CE3496729585F10AA2142,
 	CheckpointDomeSpawner_get_CollectedCount_m6F818267B81856B7DA4C232ADB3EDC4E47EBE204,
 	CheckpointDomeSpawner_set_CollectedCount_m381635EB200CC8FA236F8F912D270DE102419EA2,
@@ -641,9 +645,9 @@ static Il2CppMethodPointer s_methodPointers[317] =
 extern void Goal__ctor_m4452076EE88E564D97BBDD12E7011CAF34E275A3_AdjustorThunk (void);
 static Il2CppTokenAdjustorThunkPair s_adjustorThunks[1] = 
 {
-	{ 0x06000122, Goal__ctor_m4452076EE88E564D97BBDD12E7011CAF34E275A3_AdjustorThunk },
+	{ 0x06000124, Goal__ctor_m4452076EE88E564D97BBDD12E7011CAF34E275A3_AdjustorThunk },
 };
-static const int32_t s_InvokerIndices[317] = 
+static const int32_t s_InvokerIndices[319] = 
 {
 	-1,
 	-1,
@@ -662,6 +666,8 @@ static const int32_t s_InvokerIndices[317] =
 	18323,
 	11367,
 	22721,
+	18323,
+	18323,
 	18323,
 	18029,
 	18029,
@@ -1004,7 +1010,7 @@ IL2CPP_EXTERN_C const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule;
 const Il2CppCodeGenModule g_AssemblyU2DCSharp_CodeGenModule = 
 {
 	"Assembly-CSharp.dll",
-	317,
+	319,
 	s_methodPointers,
 	1,
 	s_adjustorThunks,
