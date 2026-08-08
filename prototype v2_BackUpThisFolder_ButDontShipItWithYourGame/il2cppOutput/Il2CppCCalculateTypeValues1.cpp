@@ -5345,13 +5345,13 @@ struct BindingsMarshaller_t51B5BB7D4CED26853A132CC054BB93300FA07521  : public Ru
 struct U3CU3Ec_tCE64441674F364DB30D93C8623ED9A6899894658  : public RuntimeObject
 {
 };
-struct U3CStartU3Ed__15_t401235D4C6DD0A660665DD21F3279D0217F75691  : public RuntimeObject
+struct U3CStartU3Ed__19_t1ECEA4B3FCE4FF9D3A109C7B072A797295535AC1  : public RuntimeObject
 {
 	int32_t ___U3CU3E1__state;
 	RuntimeObject* ___U3CU3E2__current;
 	GameLogic_tECBEC8501055C6739738F91B8986E2589806C9E1* ___U3CU3E4__this;
 };
-struct U3CSubmitLeaderboardEntryU3Ed__28_t54928BA3E04B8BFE8559D6E449744D7F49FB31D1  : public RuntimeObject
+struct U3CSubmitLeaderboardEntryU3Ed__35_t19501A7ED901BA483348A4D519422AE0F4C21221  : public RuntimeObject
 {
 	int32_t ___U3CU3E1__state;
 	RuntimeObject* ___U3CU3E2__current;
@@ -5362,7 +5362,7 @@ struct U3CSubmitLeaderboardEntryU3Ed__28_t54928BA3E04B8BFE8559D6E449744D7F49FB31
 	UnityWebRequest_t6233B8E22992FC2364A831C1ACB033EF3260C39F* ___U3CrequestU3E5__2;
 	ByteU5BU5D_tA6237BF417AE52AD70CFB4EF24A7A82613DF9031* ___U3CbodyRawU3E5__3;
 };
-struct U3CSubmitThenReturnU3Ed__27_t6438C546E3D5F24921A9F0B7708281803E2B2447  : public RuntimeObject
+struct U3CSubmitThenReturnU3Ed__32_tE3BA76CD4290A5C97DA9808D0C23D2DE3FDE958B  : public RuntimeObject
 {
 	int32_t ___U3CU3E1__state;
 	RuntimeObject* ___U3CU3E2__current;
@@ -50701,9 +50701,11 @@ struct CalibrationScreen_t8E2E72C310324020DFDA4164AC032A2611949900  : public Mon
 	float ___steadyHoldSeconds;
 	float ___steadyYawTolerance;
 	float ___steadyTimeoutSeconds;
+	float ___overallTimeoutSeconds;
 	float ___confirmationSeconds;
 	bool ___U3CIsReadyU3Ek__BackingField;
 	float ___steadyTimer;
+	float ___elapsedOnScreen;
 	float ___elapsedSinceTracking;
 	float ___lastYaw;
 	bool ___hasLastYaw;
@@ -51033,6 +51035,8 @@ struct GameLogic_tECBEC8501055C6739738F91B8986E2589806C9E1  : public MonoBehavio
 	float ___startProximityRadius;
 	float ___finishProximityRadius;
 	float ___maxTriggerAccuracy;
+	float ___proximityLogInterval;
+	float ___lastProximityLogTime;
 };
 struct GazeInputManager_t76600ACADAE6718BABD1166EBED065FFD8C90C83  : public MonoBehaviour_t532A11E69716D348D8AA7F854AFCBFCB8AD17F71
 {
@@ -55487,7 +55491,7 @@ struct GetMaterialsWithChangedPackedMaterial_000000ECU24BurstDirectCall_t32455FC
 struct U3CU3Ec_tCE64441674F364DB30D93C8623ED9A6899894658_StaticFields
 {
 	U3CU3Ec_tCE64441674F364DB30D93C8623ED9A6899894658* ___U3CU3E9;
-	Func_1_t2BE7F58348C9CC544A8973B3A9E55541DE43C457* ___U3CU3E9__15_0;
+	Func_1_t2BE7F58348C9CC544A8973B3A9E55541DE43C457* ___U3CU3E9__19_0;
 };
 struct GeoPoolShaderIDs_tA2318CCF75C3CD08B040D9D297496BBD10936238_StaticFields
 {
@@ -65987,11 +65991,11 @@ const Il2CppTypeDefinitionSizes g_typeDefinitionSize9459 = { sizeof(int32_t)+ si
 IL2CPP_EXTERN_C_CONST Il2CppTypeDefinitionSizes g_typeDefinitionSize9460;
 const Il2CppTypeDefinitionSizes g_typeDefinitionSize9460 = { sizeof(U3CU3Ec_tCE64441674F364DB30D93C8623ED9A6899894658), -1, sizeof(U3CU3Ec_tCE64441674F364DB30D93C8623ED9A6899894658_StaticFields), 0 };
 IL2CPP_EXTERN_C_CONST Il2CppTypeDefinitionSizes g_typeDefinitionSize9461;
-const Il2CppTypeDefinitionSizes g_typeDefinitionSize9461 = { sizeof(U3CStartU3Ed__15_t401235D4C6DD0A660665DD21F3279D0217F75691), -1, 0, 0 };
+const Il2CppTypeDefinitionSizes g_typeDefinitionSize9461 = { sizeof(U3CStartU3Ed__19_t1ECEA4B3FCE4FF9D3A109C7B072A797295535AC1), -1, 0, 0 };
 IL2CPP_EXTERN_C_CONST Il2CppTypeDefinitionSizes g_typeDefinitionSize9462;
-const Il2CppTypeDefinitionSizes g_typeDefinitionSize9462 = { sizeof(U3CSubmitLeaderboardEntryU3Ed__28_t54928BA3E04B8BFE8559D6E449744D7F49FB31D1), -1, 0, 0 };
+const Il2CppTypeDefinitionSizes g_typeDefinitionSize9462 = { sizeof(U3CSubmitLeaderboardEntryU3Ed__35_t19501A7ED901BA483348A4D519422AE0F4C21221), -1, 0, 0 };
 IL2CPP_EXTERN_C_CONST Il2CppTypeDefinitionSizes g_typeDefinitionSize9463;
-const Il2CppTypeDefinitionSizes g_typeDefinitionSize9463 = { sizeof(U3CSubmitThenReturnU3Ed__27_t6438C546E3D5F24921A9F0B7708281803E2B2447), -1, 0, 0 };
+const Il2CppTypeDefinitionSizes g_typeDefinitionSize9463 = { sizeof(U3CSubmitThenReturnU3Ed__32_tE3BA76CD4290A5C97DA9808D0C23D2DE3FDE958B), -1, 0, 0 };
 IL2CPP_EXTERN_C_CONST Il2CppTypeDefinitionSizes g_typeDefinitionSize9464;
 const Il2CppTypeDefinitionSizes g_typeDefinitionSize9464 = { sizeof(GameLogic_tECBEC8501055C6739738F91B8986E2589806C9E1), -1, 0, 0 };
 IL2CPP_EXTERN_C_CONST Il2CppTypeDefinitionSizes g_typeDefinitionSize9465;

@@ -22099,7 +22099,7 @@ IL2CPP_EXTERN_C  NativeSlice_1_tA54E5D259EBCC7CD8512AA352C6F3709EB237B52 NativeS
 	_returnValue = NativeSlice_1_SliceConvert_TisIl2CppFullySharedGenericStruct_m95D4A04F6012B6943507CFAECA0DFAE7A1D26AB1(_thisAdjusted, method);
 	return _returnValue;
 }
-// Method Definition Index: 81705
+// Method Definition Index: 81708
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Linq_IOrderedEnumerableU3CTElementU3E_CreateOrderedEnumerable_TisUInt32_t1833D51FFA667B18A5AA4B8D34DE284F8495D29B_m27AF1282CC8406066C450F28C992AF67EF310985_gshared (OrderedEnumerable_1_t8EEABC87399C51697FF13CC459FC26CA5A5857DA* __this, Func_2_tEDCDCD7BE3F7A4F5A742A5FD711EA63155BC825E* ___0_keySelector, RuntimeObject* ___1_comparer, bool ___2_descending, const RuntimeMethod* method) 
 {
 	il2cpp_rgctx_method_init(method);
@@ -22117,7 +22117,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Lin
 		return (RuntimeObject*)L_5;
 	}
 }
-// Method Definition Index: 81705
+// Method Definition Index: 81708
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Linq_IOrderedEnumerableU3CTElementU3E_CreateOrderedEnumerable_TisUInt32_t1833D51FFA667B18A5AA4B8D34DE284F8495D29B_m38895102FE301D19C516487216BC8FA67EBBFC63_gshared (OrderedEnumerable_1_t49A81D3EAEB40201506836E577654DE2F8EC8941* __this, Func_2_tF8ACBB86793AC8EBB434A64BA219B2B144660DC7* ___0_keySelector, RuntimeObject* ___1_comparer, bool ___2_descending, const RuntimeMethod* method) 
 {
 	il2cpp_rgctx_method_init(method);
@@ -22135,7 +22135,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Lin
 		return (RuntimeObject*)L_5;
 	}
 }
-// Method Definition Index: 81705
+// Method Definition Index: 81708
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Linq_IOrderedEnumerableU3CTElementU3E_CreateOrderedEnumerable_TisUInt32_t1833D51FFA667B18A5AA4B8D34DE284F8495D29B_m59C32817F275AED6A199C5BFEA0BFA2D21006AB2_gshared (OrderedEnumerable_1_tFFE2D41E419F999B45E7C9636190F547FE16EA00* __this, Func_2_tF80AFEAB653E375ACD0F49E44AE42BAE8761DB6F* ___0_keySelector, RuntimeObject* ___1_comparer, bool ___2_descending, const RuntimeMethod* method) 
 {
 	il2cpp_rgctx_method_init(method);
@@ -22153,7 +22153,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Lin
 		return (RuntimeObject*)L_5;
 	}
 }
-// Method Definition Index: 81705
+// Method Definition Index: 81708
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Linq_IOrderedEnumerableU3CTElementU3E_CreateOrderedEnumerable_TisUInt32_t1833D51FFA667B18A5AA4B8D34DE284F8495D29B_m16946251D211C92C78D483BEA8C9A1325943C98F_gshared (OrderedEnumerable_1_t2CA7B89590CC51BDE981B85FB02BE2FC4175E2D6* __this, Func_2_tE6D7532D9B01F3BFD1639BCA3C00C19CCA5FF609* ___0_keySelector, RuntimeObject* ___1_comparer, bool ___2_descending, const RuntimeMethod* method) 
 {
 	il2cpp_rgctx_method_init(method);
@@ -22171,7 +22171,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Lin
 		return (RuntimeObject*)L_5;
 	}
 }
-// Method Definition Index: 81705
+// Method Definition Index: 81708
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Linq_IOrderedEnumerableU3CTElementU3E_CreateOrderedEnumerable_TisUInt32_t1833D51FFA667B18A5AA4B8D34DE284F8495D29B_mEB74BF7F933F20EA5B61577342CA3914815E798B_gshared (OrderedEnumerable_1_tA6269C578EE7D3423C79F32258D574795AEF1151* __this, Func_2_t7025554EC975A118D5815ACF437B2080C169F1C0* ___0_keySelector, RuntimeObject* ___1_comparer, bool ___2_descending, const RuntimeMethod* method) 
 {
 	il2cpp_rgctx_method_init(method);
@@ -22189,7 +22189,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Lin
 		return (RuntimeObject*)L_5;
 	}
 }
-// Method Definition Index: 81705
+// Method Definition Index: 81708
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Linq_IOrderedEnumerableU3CTElementU3E_CreateOrderedEnumerable_TisUInt32_t1833D51FFA667B18A5AA4B8D34DE284F8495D29B_m0EE552DCF111C57052B512913FF80AFAB07B4582_gshared (OrderedEnumerable_1_t635FACC705EB8D479616971CD818376DC3A5AF51* __this, Func_2_tB86D019F1289E2D123C00796B373933613385952* ___0_keySelector, RuntimeObject* ___1_comparer, bool ___2_descending, const RuntimeMethod* method) 
 {
 	il2cpp_rgctx_method_init(method);
@@ -22207,7 +22207,7 @@ IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Lin
 		return (RuntimeObject*)L_5;
 	}
 }
-// Method Definition Index: 81705
+// Method Definition Index: 81708
 IL2CPP_EXTERN_C IL2CPP_METHOD_ATTR RuntimeObject* OrderedEnumerable_1_System_Linq_IOrderedEnumerableU3CTElementU3E_CreateOrderedEnumerable_TisIl2CppFullySharedGenericAny_m98823854D3405FA4B9739CA06EB8773970E89480_gshared (OrderedEnumerable_1_t9FC254A996960AAA55B70FA7417B36D16C123B28* __this, Func_2_t7F5F5324CE2DDB7001B68FFE29A5D9F907139FB0* ___0_keySelector, RuntimeObject* ___1_comparer, bool ___2_descending, const RuntimeMethod* method) 
 {
 	il2cpp_rgctx_method_init(method);
