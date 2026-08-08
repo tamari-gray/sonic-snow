@@ -23,7 +23,13 @@ public class GameLogic : MonoBehaviour
     private double currentLat;
     private double currentLng;
 
-    private string playerUsername = "Player";
+    private const string DefaultUsername = "Player";
+
+    // Firebase caps keys at 768 bytes. A leaderboard row anywhere near that is a
+    // mistake or an attack, and it would wreck the layout either way.
+    private const int MaxUsernameLength = 32;
+
+    private string playerUsername = DefaultUsername;
 
     [Header("Proximity")]
     [Tooltip("How close to the origin counts as being at the start gate, in metres.")]
@@ -286,8 +292,9 @@ public class GameLogic : MonoBehaviour
     {
         if (CurrentState != GameState.PlayerInit) return;
 
-        string enteredName = usernameInputField != null ? usernameInputField.text.Trim() : "";
-        playerUsername = string.IsNullOrEmpty(enteredName) ? "Player" : enteredName;
+        // Sanitise here rather than at submit time, so playerUsername is the exact
+        // string that ends up on the board and the log below doesn't lie about it.
+        playerUsername = SanitiseForFirebaseKey(usernameInputField != null ? usernameInputField.text : "");
 
         Debug.Log("Player username set to: " + playerUsername);
 
@@ -326,9 +333,74 @@ public class GameLogic : MonoBehaviour
         ReturnToSearching();
     }
 
+    /// <summary>
+    /// Reduces a typed-in name to something Firebase will accept as a key.
+    ///
+    /// Firebase rejects keys containing . $ # [ ] / or ASCII control characters. The
+    /// slash is the nasty one: in a PATCH body Firebase reads keys as *paths*, so
+    /// "tam/1" would quietly write leaderboard/tam/1 and nest the entry instead of
+    /// listing it, rather than failing loudly.
+    ///
+    /// Illegal characters are dropped rather than replaced, because mapping them all
+    /// to one substitute lets two different players collide on the same key and
+    /// overwrite each other's times.
+    /// </summary>
+    private static string SanitiseForFirebaseKey(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return DefaultUsername;
+
+        StringBuilder clean = new StringBuilder(name.Length);
+
+        foreach (char c in name)
+        {
+            if (c == '.' || c == '$' || c == '#' || c == '[' || c == ']' || c == '/') continue;
+            if (char.IsControl(c)) continue;
+
+            clean.Append(c);
+        }
+
+        // Trim last: stripping control characters can expose whitespace at the ends.
+        string result = clean.ToString().Trim();
+
+        if (result.Length > MaxUsernameLength)
+        {
+            int cut = MaxUsernameLength;
+
+            // An emoji is two chars, so a blind cut can leave a lone surrogate behind —
+            // which isn't valid UTF-8 and gets rejected on the way out.
+            if (char.IsHighSurrogate(result[cut - 1])) cut--;
+
+            result = result.Substring(0, cut).Trim();
+        }
+
+        return result.Length == 0 ? DefaultUsername : result;
+    }
+
+    /// <summary>
+    /// Escapes a string for use as a JSON string literal.
+    ///
+    /// Quote and backslash are both legal Firebase keys, so sanitising for Firebase
+    /// isn't enough on its own — a name like O"Brien would still produce malformed
+    /// JSON and a 400 that costs the player their run.
+    /// </summary>
+    private static string EscapeJsonString(string value)
+    {
+        StringBuilder escaped = new StringBuilder(value.Length + 8);
+
+        foreach (char c in value)
+        {
+            if (c == '"' || c == '\\') escaped.Append('\\').Append(c);
+            else if (c < 0x20) escaped.Append("\\u").Append(((int)c).ToString("x4"));
+            else escaped.Append(c);
+        }
+
+        return escaped.ToString();
+    }
+
     private IEnumerator SubmitLeaderboardEntry(string username, float elapsedSeconds)
     {
-        string json = "{\"" + username + "\":" + elapsedSeconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "}";
+        string json = "{\"" + EscapeJsonString(username) + "\":" +
+                      elapsedSeconds.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) + "}";
 
         UnityWebRequest request = new UnityWebRequest(LEADERBOARD_URL, "PATCH");
         byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
