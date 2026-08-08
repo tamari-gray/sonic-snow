@@ -18,7 +18,13 @@ public class GameLogic : MonoBehaviour
     public TMP_InputField usernameInputField;
     public GameObject playButton;
 
+    public static GameLogic Instance;
+
     public GameState CurrentState { get; private set; } = GameState.SearchingForStart;
+
+    /// <summary>The sanitised name this run will be filed under. Lets the leaderboard
+    /// pick out the local player's row without being told.</summary>
+    public string PlayerUsername => playerUsername;
 
     private double currentLat;
     private double currentLng;
@@ -54,6 +60,7 @@ public class GameLogic : MonoBehaviour
 
     void Awake()
     {
+        Instance = this;
         Debug.Log("✔ GameLogic Awake ACTIVE");
     }
 
@@ -233,18 +240,18 @@ public class GameLogic : MonoBehaviour
         if (GeoAnchor.Instance != null)
             GeoAnchor.Instance.ResetAlignment();
 
-        if (LeaderboardUI.Instance != null)
-            LeaderboardUI.Instance.Show();
+        if (RetroLeaderboardUI.Instance != null)
+            RetroLeaderboardUI.Instance.Show();
         else
-            Debug.LogWarning("LeaderboardUI instance is null!");
+            Debug.LogWarning("RetroLeaderboardUI instance is null — run Sonic Snow > Set Up Leaderboard.");
     }
 
 
     // player inputs username and presses button to start race
     void InitPlayerAndWorld()
     {
-        if (LeaderboardUI.Instance != null)
-            LeaderboardUI.Instance.Hide();
+        if (RetroLeaderboardUI.Instance != null)
+            RetroLeaderboardUI.Instance.Hide();
 
         if (RaceTimer.instance != null)
         {
