@@ -59,7 +59,7 @@ public class CheckpointDomeSpawner : MonoBehaviour
 
             GameObject dome = Instantiate(checkpointDomePrefab, GeoAnchor.Instance.Root);
             dome.transform.localPosition = enu;
-            dome.transform.localRotation = Quaternion.identity;
+            dome.transform.localRotation = GpsUtils.ReadableFromOrigin(enu);
             dome.name = "CheckpointDome_" + i;
 
             spawnedDomes.Add(dome);

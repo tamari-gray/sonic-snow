@@ -64,6 +64,33 @@ public static class GpsUtils
         return (float)(EarthRadiusM * c);
     }
 
+    /// <summary>
+    /// Yaw that makes text on geo-placed content readable to someone approaching from
+    /// the route origin — the start line.
+    ///
+    /// Unity text reads correctly when its own forward points the *same* way the viewer
+    /// is looking, not back at them: a billboard sets transform.forward = camera.forward
+    /// rather than doing a LookAt. A rider at the start looking at a point is looking
+    /// along origin-to-point, and the origin is (0,0,0) in the geo frame, so that
+    /// direction is simply the point's own ENU vector.
+    ///
+    /// Flattened to yaw only, so the finish beam stays vertical and a checkpoint dome
+    /// stays level rather than tilting to aim at a start line further up the hill.
+    ///
+    /// Apply to localRotation on something parented to GeoAnchor.Root: the input is in
+    /// the geo frame, so the result is too.
+    /// </summary>
+    public static Quaternion ReadableFromOrigin(Vector3 enu)
+    {
+        Vector3 originToPoint = new Vector3(enu.x, 0f, enu.z);
+
+        // Only degenerate if the point sits on the origin, which a sane route never
+        // does — but LookRotation logs an error on a zero vector, so don't hand it one.
+        if (originToPoint.sqrMagnitude < 1e-4f) return Quaternion.identity;
+
+        return Quaternion.LookRotation(originToPoint, Vector3.up);
+    }
+
     /// <summary>Compass bearing in degrees (0-360, 0 = true north) from point 1 to point 2.</summary>
     public static double Bearing(double lat1, double lng1, double lat2, double lng2)
     {
