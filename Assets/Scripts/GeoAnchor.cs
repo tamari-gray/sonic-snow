@@ -142,7 +142,18 @@ public class GeoAnchor : MonoBehaviour
     private float launchYaw;
     private Vector3 launchPosition;
     private bool hasLaunchPose;
-    private bool hasSeededOnce;
+
+    /// <summary>
+    /// True once the rider has actually raced away from the gate, which is what makes the
+    /// launch position stale — not merely the fact that we've seeded before.
+    ///
+    /// These are different questions and conflating them cost real accuracy: the seed
+    /// runs several times before the first race (once when calibration latches the pose,
+    /// again after GameLogic resets the alignment), and treating the second of those as
+    /// "between races" threw away the exact ritual position in favour of a single GPS fix,
+    /// sliding the whole world sideways by that fix's error.
+    /// </summary>
+    private bool launchPoseSpent;
 
     private void Awake()
     {
@@ -200,11 +211,30 @@ public class GeoAnchor : MonoBehaviour
         hasLaunchPose = true;
 
         // Drop back to unseeded so TrySeed re-applies with the settled pose next frame.
-        hasSeededOnce = false;
+        // A fresh ritual also re-arms the launch position: the rider is back at the gate.
+        launchPoseSpent = false;
         IsAligned = false;
 
         if (logCalibration)
             Debug.Log($"[GeoAnchor] Launch pose re-latched at yaw {launchYaw:F1}deg.");
+    }
+
+    /// <summary>
+    /// Tells the anchor the rider has left the gate, so the launch position no longer
+    /// describes where they are. Later seeds derive the origin from GPS instead.
+    ///
+    /// Called when the race actually starts rather than on the first seed: several seeds
+    /// happen while the rider is still standing at the gate, and all of them should keep
+    /// using the ritual position.
+    /// </summary>
+    public void MarkLaunchPoseSpent()
+    {
+        if (launchPoseSpent) return;
+
+        launchPoseSpent = true;
+
+        if (logCalibration)
+            Debug.Log("[GeoAnchor] Race started — launch position retired, later seeds use GPS.");
     }
 
     private void RecordPose()
@@ -323,7 +353,6 @@ public class GeoAnchor : MonoBehaviour
 
         IsAligned = true;
         Confidence = 0.2f;
-        hasSeededOnce = true;
 
         if (logCalibration)
         {
@@ -340,9 +369,10 @@ public class GeoAnchor : MonoBehaviour
     /// </summary>
     private Vector3 SeedPosition(Quaternion rotation)
     {
-        // First seed: trust the ritual. The player is standing on the origin, which is
-        // a better position estimate than a single GPS fix carrying several metres of noise.
-        if (!hasSeededOnce) return WithGroundY(launchPosition, launchPosition);
+        // Before the first race: trust the ritual. The player is standing on the origin,
+        // which is a far better position estimate than a single GPS fix carrying several
+        // metres of noise. This holds for every seed until they actually ride away.
+        if (!launchPoseSpent) return WithGroundY(launchPosition, launchPosition);
 
         // Re-seed between races: the player is at the finish, not the start, so the
         // launch position tells us nothing useful. Derive the origin from where they

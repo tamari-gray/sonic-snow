@@ -320,6 +320,10 @@ public class GameLogic : MonoBehaviour
 
         CurrentState = GameState.Racing;
 
+        // From here the rider leaves the gate, so the launch position stops describing
+        // where they are. Until this moment every seed should keep using it.
+        if (GeoAnchor.Instance != null) GeoAnchor.Instance.MarkLaunchPoseSpent();
+
         if (RaceTimer.instance != null)
         {
             RaceTimer.instance.StartTimer();
