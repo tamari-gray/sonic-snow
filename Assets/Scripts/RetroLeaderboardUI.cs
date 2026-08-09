@@ -30,8 +30,6 @@ public class RetroLeaderboardUI : MonoBehaviour
     [SerializeField] private TMP_FontAsset numeralFont;
 
     [Header("Behaviour")]
-    [SerializeField] private bool showScanlines = true;
-
     [Tooltip("Sort by score (highest first) rather than time (fastest first).")]
     [SerializeField] private bool sortByScore = true;
 
@@ -62,7 +60,28 @@ public class RetroLeaderboardUI : MonoBehaviour
     private static readonly Color RibbonShadow = Hex("8f0f1c");
     private static readonly Color RibbonBorder = Hex("14142c");
 
-    private const float BoardWidth = 1040f;
+    /// <summary>Widest the board is ever drawn. Below this it shrinks with the screen.</summary>
+    private const float MaxBoardWidth = 1040f;
+
+    /// <summary>Gap between the board and the screen edge, per the design's 24px side padding.</summary>
+    private const float SidePadding = 24f;
+
+    // Text is drawn at twice the handoff's sizes so it's legible on a phone held at
+    // arm's length. The design's px values assume a desktop viewport; at 1x a rider name
+    // came out under a millimetre tall on a Pixel 6.
+    private const float TitleSize   = 68f;   // was 34
+    private const float NumeralSize = 60f;   // was 30
+    private const float NameSize    = 24f;   // was 12
+    private const float HeaderSize  = 20f;   // was 10
+
+    // Doubling the text doubles how much width each column needs, but the phone didn't
+    // get any wider — so the generous desktop gutters come back in to pay for it.
+    private const float ColumnGap    = 10f;  // was 14
+    private const float RankColumn   = 70f;  // was 62
+    private const float NameColumn   = 180f; // was 200 (flexible minimum)
+    private const float GatesColumn  = 130f; // was 132
+    private const float TimeColumn   = 230f; // was 108
+    private const float ScoreColumn  = 190f; // was 130
     private const int Gates = 5;  // 4 AR checkpoints + the finish gate
 
     /// <summary>One row of the board.</summary>
@@ -76,8 +95,8 @@ public class RetroLeaderboardUI : MonoBehaviour
     }
 
     private RectTransform root;
+    private RectTransform board;
     private RectTransform rowsHolder;
-    private RawImage scanlines;
 
     private void Awake()
     {
@@ -86,20 +105,28 @@ public class RetroLeaderboardUI : MonoBehaviour
         Hide();
     }
 
-    private void Update()
-    {
-        if (scanlines == null || !showScanlines) return;
-
-        // 8px per 1.6s, linear, looping. The tile is 4px, so 8px is exactly two periods.
-        Rect uv = scanlines.uvRect;
-        uv.y -= Time.unscaledDeltaTime / 1.6f * (8f / 4f);
-        scanlines.uvRect = uv;
-    }
-
     public void Show()
     {
         if (root != null) root.gameObject.SetActive(true);
+
+        FitToScreen();
         StartCoroutine(FetchAndDisplay());
+    }
+
+    /// <summary>
+    /// Keeps the board inside the screen. It stretches to the available width less the
+    /// side padding, up to the design's 1040px maximum — "1040 wide max, shrinks with the
+    /// viewport", rather than a fixed width that overflows a portrait phone.
+    ///
+    /// Done on Show rather than every frame: the board is only visible between races, so
+    /// a rotation while it's hidden is picked up next time it appears.
+    /// </summary>
+    private void FitToScreen()
+    {
+        if (board == null || root == null) return;
+
+        float available = root.rect.width - SidePadding * 2f;
+        board.sizeDelta = new Vector2(Mathf.Min(available, MaxBoardWidth), 0f);
     }
 
     public void Hide()
@@ -188,7 +215,12 @@ public class RetroLeaderboardUI : MonoBehaviour
     /// largest possible time bonus, so any rider who cleared more gates always outscores
     /// one who cleared fewer, however fast they were.
     /// </summary>
-    private const long GateStep = 1_000_000L;
+    /// <summary>
+    /// Points per checkpoint. Ten thousand rather than the mock's million: at doubled
+    /// text a nine-character score like "5,475,599" needs about 300px, and the column is
+    /// 190. Five digits still reads as an arcade score and fits.
+    /// </summary>
+    private const long GateStep = 10_000L;
 
     /// <summary>Runs slower than this earn no time bonus at all, in seconds.</summary>
     private const float SlowestScoringRun = 200f;
@@ -241,11 +273,11 @@ public class RetroLeaderboardUI : MonoBehaviour
 
         GameObject row = Block("Row", rowsHolder, background);
         LayoutElement rowLayout = row.AddComponent<LayoutElement>();
-        rowLayout.minHeight = 56f;
+        rowLayout.minHeight = 96f;
 
         HorizontalLayoutGroup layout = row.AddComponent<HorizontalLayoutGroup>();
-        layout.padding = new RectOffset(14, 14, 15, 15);
-        layout.spacing = 14f;
+        layout.padding = new RectOffset(10, 10, 12, 12);
+        layout.spacing = ColumnGap;
         layout.childAlignment = TextAnchor.MiddleLeft;
         layout.childForceExpandWidth = false;
         layout.childForceExpandHeight = false;
@@ -261,57 +293,57 @@ public class RetroLeaderboardUI : MonoBehaviour
         bar.AddComponent<LayoutElement>().ignoreLayout = true;
 
         // Col 1 — rank, zero padded.
-        Numeral(row.transform, rank.ToString("00"), 30f, accent, TextAlignmentOptions.Left, 62f);
+        Numeral(row.transform, rank.ToString("00"), NumeralSize, accent, TextAlignmentOptions.Left, RankColumn);
 
         // Col 2 — avatar chip then name, flexible width.
-        GameObject riderCol = Row("Rider", (RectTransform)row.transform, 14f);
+        GameObject riderCol = Row("Rider", (RectTransform)row.transform, 10f);
         LayoutElement riderLayout = riderCol.AddComponent<LayoutElement>();
         riderLayout.flexibleWidth = 1f;
-        riderLayout.minWidth = 200f;
+        riderLayout.minWidth = NameColumn;
 
         BuildAvatar((RectTransform)riderCol.transform, accent);
 
-        TMP_Text name = Label(riderCol.transform, rider.Name, 12f,
+        TMP_Text name = Label(riderCol.transform, rider.Name, NameSize,
                               rider.IsLocalPlayer ? AccentLocal : TextPrimary,
                               TextAlignmentOptions.Left, 0f);
         name.characterSpacing = 1f;
         name.overflowMode = TextOverflowModes.Ellipsis;
-        name.enableWordWrapping = false;
+        name.textWrappingMode = TextWrappingModes.NoWrap;
         LayoutElement nameLayout = name.gameObject.AddComponent<LayoutElement>();
         nameLayout.flexibleWidth = 1f;
 
         // Col 3 — checkpoint pips.
-        GameObject pips = Row("Checkpoints", (RectTransform)row.transform, 7f);
-        pips.AddComponent<LayoutElement>().preferredWidth = 132f;
+        GameObject pips = Row("Checkpoints", (RectTransform)row.transform, 5f);
+        pips.AddComponent<LayoutElement>().preferredWidth = GatesColumn;
 
         for (int i = 0; i < Gates; i++) BuildPip((RectTransform)pips.transform, i < rider.Gates, accent, background);
 
         // Col 4 / 5 — time and score, right aligned.
-        Numeral(row.transform, FormatTime(rider.Seconds), 30f, TextPrimary, TextAlignmentOptions.Right, 108f);
-        Numeral(row.transform, rider.Score.ToString("N0"), 30f, Gold, TextAlignmentOptions.Right, 130f);
+        Numeral(row.transform, FormatTime(rider.Seconds), NumeralSize, TextPrimary, TextAlignmentOptions.Right, TimeColumn);
+        Numeral(row.transform, rider.Score.ToString("N0"), NumeralSize, Gold, TextAlignmentOptions.Right, ScoreColumn);
     }
 
-    /// <summary>Concentric squares: 4px accent frame, 4px dark ring, accent core.</summary>
+    /// <summary>Concentric squares: accent frame, dark ring, accent core.</summary>
     private void BuildAvatar(RectTransform parent, Color accent)
     {
         GameObject chip = Block("Avatar", parent, accent);
         LayoutElement chipLayout = chip.AddComponent<LayoutElement>();
-        chipLayout.preferredWidth = 26f;
-        chipLayout.preferredHeight = 26f;
+        chipLayout.preferredWidth = 44f;
+        chipLayout.preferredHeight = 44f;
 
-        Inset(Block("Gap", (RectTransform)chip.transform, Panel), 4f);
-        Inset(Block("Core", (RectTransform)chip.transform, accent), 8f);
+        Inset(Block("Gap", (RectTransform)chip.transform, Panel), 7f);
+        Inset(Block("Core", (RectTransform)chip.transform, accent), 14f);
     }
 
     private void BuildPip(RectTransform parent, bool cleared, Color accent, Color rowBackground)
     {
         GameObject pip = Block("Pip", parent, cleared ? accent : PipEmpty);
         LayoutElement pipLayout = pip.AddComponent<LayoutElement>();
-        pipLayout.preferredWidth = 16f;
-        pipLayout.preferredHeight = 16f;
+        pipLayout.preferredWidth = 22f;
+        pipLayout.preferredHeight = 22f;
 
         // An uncleared gate is an outline, so punch the middle back out to the row colour.
-        if (!cleared) Inset(Block("Hollow", (RectTransform)pip.transform, rowBackground), 3f);
+        if (!cleared) Inset(Block("Hollow", (RectTransform)pip.transform, rowBackground), 4f);
     }
 
     // --- static chrome ---------------------------------------------------------
@@ -327,13 +359,15 @@ public class RetroLeaderboardUI : MonoBehaviour
         vignette.GetComponent<Image>().raycastTarget = false;
 
         GameObject boardCol = new GameObject("Board", typeof(RectTransform));
-        RectTransform board = (RectTransform)boardCol.transform;
+        board = (RectTransform)boardCol.transform;
         board.SetParent(root, false);
-        board.anchorMin = new Vector2(0.5f, 1f);
-        board.anchorMax = new Vector2(0.5f, 1f);
-        board.pivot = new Vector2(0.5f, 1f);
-        board.sizeDelta = new Vector2(BoardWidth, 0f);
-        board.anchoredPosition = new Vector2(0f, -56f);
+        // Centred rather than pinned to the top: at doubled text the board is a chunky
+        // block on a tall phone, and hanging it off the top left a lot of dead space.
+        board.anchorMin = new Vector2(0.5f, 0.5f);
+        board.anchorMax = new Vector2(0.5f, 0.5f);
+        board.pivot = new Vector2(0.5f, 0.5f);
+        board.sizeDelta = new Vector2(MaxBoardWidth, 0f);  // FitToScreen narrows this to suit
+        board.anchoredPosition = Vector2.zero;
 
         VerticalLayoutGroup boardLayout = boardCol.AddComponent<VerticalLayoutGroup>();
         boardLayout.childAlignment = TextAnchor.UpperCenter;
@@ -343,8 +377,6 @@ public class RetroLeaderboardUI : MonoBehaviour
 
         BuildRibbon(board);
         BuildPanel(board);
-
-        BuildScanlines(root);
     }
 
     private void BuildRibbon(RectTransform parent)
@@ -352,7 +384,7 @@ public class RetroLeaderboardUI : MonoBehaviour
         GameObject block = new GameObject("Ribbon", typeof(RectTransform));
         RectTransform rect = (RectTransform)block.transform;
         rect.SetParent(parent, false);
-        block.AddComponent<LayoutElement>().preferredHeight = 118f;
+        block.AddComponent<LayoutElement>().preferredHeight = 172f;
 
         // Tails: a 26px bar behind the plate. The design notches it with a clip-path; three
         // hard rectangles read the same at this scale and suit the no-curves brief.
@@ -392,14 +424,14 @@ public class RetroLeaderboardUI : MonoBehaviour
         RectTransform titleRect = (RectTransform)titleStack.transform;
         titleRect.SetParent(content.transform, false);
         LayoutElement titleLayout = titleStack.AddComponent<LayoutElement>();
-        titleLayout.preferredWidth = 560f;
-        titleLayout.preferredHeight = 44f;
+        titleLayout.preferredWidth = 620f;
+        titleLayout.preferredHeight = 84f;
 
-        TMP_Text shadow = Label(titleStack.transform, "LEADERBOARD", 34f, RibbonShadow, TextAlignmentOptions.Center, 0f);
+        TMP_Text shadow = Label(titleStack.transform, "LEADERBOARD", TitleSize, RibbonShadow, TextAlignmentOptions.Center, 0f);
         Stretch((RectTransform)shadow.transform, new Vector2(4f, -4f));
         shadow.characterSpacing = 5f;
 
-        TMP_Text title = Label(titleStack.transform, "LEADERBOARD", 34f, Color.white, TextAlignmentOptions.Center, 0f);
+        TMP_Text title = Label(titleStack.transform, "LEADERBOARD", TitleSize, Color.white, TextAlignmentOptions.Center, 0f);
         Stretch((RectTransform)title.transform, Vector2.zero);
         title.characterSpacing = 5f;
 
@@ -417,7 +449,7 @@ public class RetroLeaderboardUI : MonoBehaviour
 
         GameObject inner = Block("PanelInner", (RectTransform)outer.transform, Panel);
         VerticalLayoutGroup innerLayout = inner.AddComponent<VerticalLayoutGroup>();
-        innerLayout.padding = new RectOffset(26, 26, 28, 22);
+        innerLayout.padding = new RectOffset(16, 16, 20, 16);
         innerLayout.spacing = 12f;
         innerLayout.childForceExpandWidth = true;
         innerLayout.childForceExpandHeight = false;
@@ -446,46 +478,21 @@ public class RetroLeaderboardUI : MonoBehaviour
         stack.childForceExpandHeight = false;
         header.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        GameObject labels = Row("Labels", (RectTransform)header.transform, 14f);
+        GameObject labels = Row("Labels", (RectTransform)header.transform, ColumnGap);
         HorizontalLayoutGroup labelLayout = labels.GetComponent<HorizontalLayoutGroup>();
-        labelLayout.padding = new RectOffset(14, 14, 0, 14);
+        labelLayout.padding = new RectOffset(10, 10, 0, 12);
 
-        HeaderLabel(labels.transform, "RANK", TextAlignmentOptions.Left, 62f, false);
-        HeaderLabel(labels.transform, "RIDER", TextAlignmentOptions.Left, 200f, true);
-        HeaderLabel(labels.transform, "CHECKPOINTS", TextAlignmentOptions.Left, 132f, false);
-        HeaderLabel(labels.transform, "TIME", TextAlignmentOptions.Right, 108f, false);
-        HeaderLabel(labels.transform, sortByScore ? "SCORE" : "SCORE", TextAlignmentOptions.Right, 130f, false);
+        HeaderLabel(labels.transform, "RANK", TextAlignmentOptions.Left, RankColumn, false);
+        HeaderLabel(labels.transform, "RIDER", TextAlignmentOptions.Left, NameColumn, true);
+        // Abbreviated: "CHECKPOINTS" at double size no longer fits its column.
+        HeaderLabel(labels.transform, "GATES", TextAlignmentOptions.Left, GatesColumn, false);
+        HeaderLabel(labels.transform, "TIME", TextAlignmentOptions.Right, TimeColumn, false);
+        HeaderLabel(labels.transform, "SCORE", TextAlignmentOptions.Right, ScoreColumn, false);
 
         GameObject rule = Block("Rule", (RectTransform)header.transform, Rule);
         rule.AddComponent<LayoutElement>().preferredHeight = 4f;
     }
 
-    private void BuildScanlines(RectTransform parent)
-    {
-        // A 4px period: 2px of 30% black over 2px of nothing. One tiny texture, tiled.
-        Texture2D tile = new Texture2D(1, 4, TextureFormat.RGBA32, false)
-        {
-            filterMode = FilterMode.Point,
-            wrapMode = TextureWrapMode.Repeat,
-        };
-
-        Color band = new Color(0f, 0f, 0f, 0.30f);
-        tile.SetPixels(new[] { band, band, Color.clear, Color.clear });
-        tile.Apply();
-
-        GameObject overlay = new GameObject("Scanlines", typeof(RectTransform), typeof(RawImage));
-        RectTransform rect = (RectTransform)overlay.transform;
-        rect.SetParent(parent, false);
-        Stretch(rect, Vector2.zero);
-
-        scanlines = overlay.GetComponent<RawImage>();
-        scanlines.texture = tile;
-        scanlines.raycastTarget = false;
-        scanlines.uvRect = new Rect(0f, 0f, 1f, Screen.height / 4f);
-        overlay.SetActive(showScanlines);
-
-        rect.SetAsLastSibling();
-    }
 
     // --- small builders --------------------------------------------------------
 
@@ -567,7 +574,7 @@ public class RetroLeaderboardUI : MonoBehaviour
         rect.anchorMin = new Vector2(0.5f, 1f);
         rect.anchorMax = new Vector2(0.5f, 1f);
         rect.pivot = new Vector2(0.5f, 1f);
-        rect.sizeDelta = new Vector2(700f, 92f);
+        rect.sizeDelta = new Vector2(820f, 132f);
         rect.anchoredPosition = offset;
 
         return rect;
@@ -632,14 +639,14 @@ public class RetroLeaderboardUI : MonoBehaviour
     private void HeaderLabel(Transform parent, string text, TextAlignmentOptions alignment,
                              float width, bool flexible)
     {
-        TMP_Text label = Label(parent, text, 10f, TextMuted, alignment, width);
+        TMP_Text label = Label(parent, text, HeaderSize, TextMuted, alignment, width);
         label.characterSpacing = 1f;
 
         if (!flexible) return;
 
         LayoutElement layout = label.GetComponent<LayoutElement>();
         layout.flexibleWidth = 1f;
-        layout.minWidth = 200f;
+        layout.minWidth = NameColumn;
     }
 
     /// <summary>M:SS.hh, e.g. 1:42.06.</summary>

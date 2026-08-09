@@ -38,11 +38,17 @@ public static class LeaderboardSetup
 
         CanvasScaler scaler = Ensure<CanvasScaler>(canvasObject);
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
 
-        // Match height: the board is a tall centred column, so vertical fit is what matters.
+        // Portrait reference — the app's default orientation. A landscape 1920x1080
+        // reference matched on height gives a Pixel 6 a logical width of only 486px,
+        // which is why a 1040px board rendered twice as wide as the screen.
+        scaler.referenceResolution = new Vector2(1080f, 1920f);
+
+        // Blended rather than pure width or height: matching width alone overflows
+        // vertically if the phone is rotated to landscape, matching height alone
+        // overflows horizontally in portrait. 0.5 keeps the board on screen either way.
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 1f;
+        scaler.matchWidthOrHeight = 0.5f;
 
         Ensure<GraphicRaycaster>(canvasObject);
 
@@ -72,19 +78,25 @@ public static class LeaderboardSetup
 
     /// <summary>
     /// Disables the previous leaderboard rather than deleting it, so a scene that still
-    /// has references to it doesn't come up with missing objects. Delete by hand once
-    /// you're happy with the new board.
+    /// references it doesn't come up with missing objects. Delete by hand once the new
+    /// board looks right.
+    ///
+    /// Looked up by name rather than by component type on purpose: referencing the old
+    /// LeaderboardUI class here would mean deleting that script breaks this editor
+    /// script, and the whole project stops compiling over a tidy-up.
     /// </summary>
     private static void RetireOldLeaderboard()
     {
-        LeaderboardUI old = Object.FindAnyObjectByType<LeaderboardUI>(FindObjectsInactive.Include);
-        if (old == null) return;
+        foreach (string name in new[] { "Leaderboard", "LeaderboardPanel" })
+        {
+            GameObject old = GameObject.Find(name);
+            if (old == null) continue;
 
-        Undo.RecordObject(old.gameObject, "Retire old leaderboard");
-        old.gameObject.SetActive(false);
+            Undo.RecordObject(old, "Retire old leaderboard");
+            old.SetActive(false);
 
-        Debug.Log($"[LeaderboardSetup] Disabled the old '{old.gameObject.name}' object. " +
-                  "Delete it once the new board looks right.");
+            Debug.Log($"[LeaderboardSetup] Disabled '{name}'. Safe to delete once the new board looks right.");
+        }
     }
 
     private static T Ensure<T>(GameObject go) where T : Component

@@ -271,8 +271,23 @@ public class GameLogic : MonoBehaviour
         ShowUsernamePanel();
     }
 
+    /// <summary>
+    /// Hands GameLogic the widgets a runtime-built username panel created, so the rest of
+    /// this class carries on working against the same two references it always had.
+    /// Called by <see cref="RetroUsernamePanel"/> before the first race.
+    /// </summary>
+    public void BindUsernameUI(TMP_InputField field, GameObject play)
+    {
+        usernameInputField = field;
+        playButton = play;
+    }
+
     void ShowUsernamePanel()
     {
+        // The retro panel owns the backdrop and framing; the input field below is one of
+        // its children, so showing the field alone would leave the chrome hidden.
+        if (RetroUsernamePanel.Instance != null) RetroUsernamePanel.Instance.Show();
+
         if (usernameInputField != null)
         {
             usernameInputField.gameObject.SetActive(true);
@@ -324,6 +339,7 @@ public class GameLogic : MonoBehaviour
 
         if (playButton != null) playButton.SetActive(false);
         if (usernameInputField != null) usernameInputField.gameObject.SetActive(false);
+        if (RetroUsernamePanel.Instance != null) RetroUsernamePanel.Instance.Hide();
 
         EnterRacingState();
     }
