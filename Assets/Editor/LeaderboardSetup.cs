@@ -81,9 +81,9 @@ public static class LeaderboardSetup
     /// references it doesn't come up with missing objects. Delete by hand once the new
     /// board looks right.
     ///
-    /// Looked up by name rather than by component type on purpose: referencing the old
-    /// LeaderboardUI class here would mean deleting that script breaks this editor
-    /// script, and the whole project stops compiling over a tidy-up.
+    /// Looked up by name rather than by component type on purpose — and that decision
+    /// paid off: the old leaderboard script has since been deleted, which would have
+    /// broken this file and stopped the whole project compiling over a tidy-up.
     /// </summary>
     private static void RetireOldLeaderboard()
     {
