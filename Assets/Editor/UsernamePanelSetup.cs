@@ -58,8 +58,8 @@ public static class UsernamePanelSetup
 
         // The panel builds its widgets in Awake, which hasn't run in edit mode — so the
         // rewiring below happens on entering play mode instead, via the panel itself.
-        Debug.Log("[UsernamePanelSetup] Panel created. GameLogic and UsernameInputValidator " +
-                  "are rewired automatically at runtime — see RetroUsernamePanel.Start().");
+        Debug.Log("[UsernamePanelSetup] Panel created. GameLogic is rewired to the new input " +
+                  "field and button automatically at runtime — see RetroUsernamePanel.Start().");
 
         RetireOldUsernameUI();
 
