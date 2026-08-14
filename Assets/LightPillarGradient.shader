@@ -59,6 +59,7 @@ Shader "SonicSnow/LightPillarGradient"
                 float4 positionCS : SV_POSITION;
                 float  heightT    : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             // Must match the Properties block exactly, or the SRP Batcher silently
@@ -77,6 +78,7 @@ Shader "SonicSnow/LightPillarGradient"
 
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
 
@@ -90,6 +92,7 @@ Shader "SonicSnow/LightPillarGradient"
             half4 Fragment(Varyings input) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
                 // Clamped away from the ends so neither segment can divide by zero.
                 float marker = clamp(_MarkerHeight, 0.001, 0.999);
