@@ -34,6 +34,12 @@ public class ZzzLog : MonoBehaviour
 
     void HandleLog(string logString, string stackTrace, LogType type)
     {
+        // TMP logs a warning whenever a string it's asked to render contains a glyph
+        // missing from the font. Displaying that warning re-triggers the same warning
+        // about its own text object forever, pegging a frame every update — drop it.
+        if (type == LogType.Warning && logString.Contains("was not found in the") && logString.Contains("font asset"))
+            return;
+
         myLogQueue.Enqueue("[" + type + "] : " + logString);
         if (type == LogType.Exception)
             myLogQueue.Enqueue(stackTrace);

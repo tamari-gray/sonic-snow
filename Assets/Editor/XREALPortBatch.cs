@@ -21,4 +21,14 @@ public static class XREALPortBatch
         bool saved = EditorSceneManager.SaveOpenScenes();
         Debug.Log($"[XREALPortBatch] Canvas port applied to {ScenePath}. Saved: {saved}");
     }
+
+    public static void RunStartDistanceSetup()
+    {
+        EditorSceneManager.OpenScene(ScenePath);
+
+        StartDistanceSetup.SetUp();
+
+        bool saved = EditorSceneManager.SaveOpenScenes();
+        Debug.Log($"[XREALPortBatch] Start distance readout applied to {ScenePath}. Saved: {saved}");
+    }
 }

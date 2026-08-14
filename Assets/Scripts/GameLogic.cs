@@ -22,6 +22,10 @@ public class GameLogic : MonoBehaviour
 
     public GameState CurrentState { get; private set; } = GameState.SearchingForStart;
 
+    /// <summary>Live ground distance to the start line, in metres. -1 until the first
+    /// GPS fix and route config are both in, same gate as the proximity check itself.</summary>
+    public float DistanceToStart { get; private set; } = -1f;
+
     /// <summary>The sanitised name this run will be filed under. Lets the leaderboard
     /// pick out the local player's row without being told.</summary>
     public string PlayerUsername => playerUsername;
@@ -140,6 +144,7 @@ public class GameLogic : MonoBehaviour
         MapData config = MapDataFetcher.Instance.LoadedConfig;
 
         float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.originLat, config.originLng);
+        DistanceToStart = distance;
 
         // Everything you need to diagnose a failed start, on one line in the on-screen log.
         if (ShouldLogProximity())
