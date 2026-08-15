@@ -780,6 +780,7 @@ GameObject:
   m_Component:
   - component: {fileID: 337142528}
   - component: {fileID: 337142527}
+  - component: {fileID: 337142529}
   m_Layer: 0
   m_Name: GameLogic
   m_TagString: Untagged
@@ -822,6 +823,23 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &337142529
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 337142526}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e9bf0d59915b7d4f8dbc49c1ed26b7f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RaceRecorder
+  blendMode: 0
+  resolutionLevel: 0
+  audioState: 1
+  saveToGallery: 1
+  recordingEnabled: 1
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
@@ -2168,7 +2186,7 @@ MonoBehaviour:
   goodBaseline: 80
   maxResidual: 15
   smoothing: 2
-  deviceHoldHeight: 1.4
+  deviceHoldHeight: 1.6
   logCalibration: 1
 --- !u!4 &2011504715
 Transform:

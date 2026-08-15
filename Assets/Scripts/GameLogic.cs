@@ -104,6 +104,11 @@ public class GameLogic : MonoBehaviour
             yield return new WaitUntil(() => CalibrationScreen.Instance.IsReady);
         }
 
+        // Roll from here rather than at the start gate: the walk up to the line is part of
+        // the footage, and starting the camera mid-race would cost frames exactly when the
+        // rider is moving. RaceRecorder stops itself at the finish, or on pause/quit.
+        if (RaceRecorder.Instance != null) RaceRecorder.Instance.StartRecording();
+
         BeginSearchingForStart();
     }
 
@@ -384,6 +389,8 @@ public class GameLogic : MonoBehaviour
         Debug.Log("Finish line reached!");
 
         CurrentState = GameState.FinishedRace;
+
+        if (RaceRecorder.Instance != null) RaceRecorder.Instance.StopRecording();
 
         float elapsedSeconds = 0f;
 

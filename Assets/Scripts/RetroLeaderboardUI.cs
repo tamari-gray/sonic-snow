@@ -280,7 +280,9 @@ public class RetroLeaderboardUI : MonoBehaviour
         layout.childForceExpandWidth = true;
         layout.childForceExpandHeight = false;
 
-        TMP_Text label = Label(row.transform, "-- m to start", NumeralSize, DistanceOrange,
+        // Smaller than NumeralSize (60) — "Distance to start: 100m (100m±)" is a lot
+        // longer than a bare rank/time/score numeral and needs to fit on one line.
+        TMP_Text label = Label(row.transform, "Distance to start: -- m", NameSize * 1.5f, DistanceOrange,
                                TextAlignmentOptions.Center, 0f);
         label.fontStyle = FontStyles.Bold;
         if (numeralFont != null) label.font = numeralFont;

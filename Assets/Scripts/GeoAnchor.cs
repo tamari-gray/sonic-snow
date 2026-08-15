@@ -77,8 +77,11 @@ public class GeoAnchor : MonoBehaviour
     [Tooltip("How fast Root eases toward a new solution. 0 snaps instantly, which reads as the world jumping.")]
     [SerializeField] private float smoothing = 2f;
 
-    [Tooltip("Assumed height of the device above the snow when the vertical anchor is set, in metres.")]
-    [SerializeField] private float deviceHoldHeight = 1.4f;
+    [Tooltip("Assumed height of the device above the snow when the vertical anchor is set, in metres. " +
+             "1.6 suits head-mounted glasses (eye height); the old 1.4 default was for a phone held " +
+             "at chest height. Getting this wrong offsets the whole geo ground plane by the difference, " +
+             "so tune it to the rider's actual eye height if placement sits consistently high or low.")]
+    [SerializeField] private float deviceHoldHeight = 1.6f;
 
     [Header("Debug")]
     [SerializeField] private bool logCalibration = true;

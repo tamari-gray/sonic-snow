@@ -19,6 +19,16 @@ public class StartDistanceUI : MonoBehaviour
         if (label == null || GameLogic.Instance == null) return;
 
         float distance = GameLogic.Instance.DistanceToStart;
-        label.text = distance >= 0f ? $"{distance:F0}m to start" : "-- m to start";
+        if (distance < 0f)
+        {
+            label.text = "Distance to start: -- m";
+            return;
+        }
+
+        string accuracy = LocationHandler.Instance != null
+            ? $" ({LocationHandler.Instance.HorizontalAccuracy:F0}m±)"
+            : "";
+
+        label.text = $"Distance to start: {distance:F0}m{accuracy}";
     }
 }

@@ -23,6 +23,37 @@ public static class XREALPortBatch
     }
 
     /// <summary>
+    /// Attaches <see cref="RaceRecorder"/> to the GameLogic object, which already survives for
+    /// the whole session and is where GameLogic drives recording start/stop from.
+    /// Safe to re-run: skips if the component is already there.
+    /// </summary>
+    public static void SetUpRaceRecorder()
+    {
+        EditorSceneManager.OpenScene(ScenePath);
+
+        GameObject host = GameObject.Find("GameLogic");
+        if (host == null)
+        {
+            Debug.LogError("[XREALPortBatch] No 'GameLogic' GameObject in the scene — can't attach RaceRecorder.");
+            return;
+        }
+
+        if (host.GetComponent<RaceRecorder>() == null)
+        {
+            host.AddComponent<RaceRecorder>();
+            EditorSceneManager.MarkSceneDirty(host.scene);
+            Debug.Log("[XREALPortBatch] RaceRecorder attached to GameLogic.");
+        }
+        else
+        {
+            Debug.Log("[XREALPortBatch] RaceRecorder already present — nothing to do.");
+        }
+
+        bool saved = EditorSceneManager.SaveOpenScenes();
+        Debug.Log($"[XREALPortBatch] Saved: {saved}");
+    }
+
+    /// <summary>
     /// One-off cleanup: removes the floating "StartDistanceText" object an earlier pass
     /// added directly under LeaderboardCanvas. Superseded by RetroLeaderboardUI's own
     /// distance row, which is built in code and only exists while the board is populated.
