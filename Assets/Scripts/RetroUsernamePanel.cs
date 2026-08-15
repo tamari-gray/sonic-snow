@@ -1,3 +1,4 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -13,6 +14,14 @@ using UnityEngine.UI;
 /// and <see cref="Button"/> it builds, and the editor setup assigns those to GameLogic's
 /// existing fields — so username sanitising, the play-button gating in
 /// UsernameInputValidator, and OnPlayButtonPressed all work unchanged.
+///
+/// Also drives an idle auto-start: the Play button relies on a raycast hitting a
+/// World Space canvas, which isn't reliably reachable via the Beam Pro's touchscreen in
+/// an HMD. Rather than fix touch targeting, this sidesteps it — stop typing for a beat
+/// with a real name entered, and a short "3, 2, 1, GET READY" overlay counts down and
+/// then fires the same path OnPlayButtonPressed already does. Manually tapping Play (if
+/// it does land) still works exactly as before; the two paths are safe to race, since
+/// OnPlayButtonPressed itself is gated on CurrentState and no-ops the second call.
 /// </summary>
 public class RetroUsernamePanel : MonoBehaviour
 {
@@ -20,6 +29,16 @@ public class RetroUsernamePanel : MonoBehaviour
 
     [Header("Fonts")]
     [SerializeField] private TMP_FontAsset displayFont;
+
+    [Header("Idle auto-start")]
+    [Tooltip("Seconds of no typing before the auto-start countdown begins.")]
+    [SerializeField] private float idleSecondsBeforeAutoStart = 1f;
+
+    [Tooltip("Minimum characters typed before idle time is allowed to trigger the countdown.")]
+    [SerializeField] private int minCharactersToAutoStart = 2;
+
+    [Tooltip("Seconds held on each countdown beat (3, 2, 1, GET READY).")]
+    [SerializeField] private float autoStartStepDuration = 1f;
 
     /// <summary>The input the player types into. Wire this to GameLogic.usernameInputField.</summary>
     public TMP_InputField InputField { get; private set; }
@@ -34,11 +53,20 @@ public class RetroUsernamePanel : MonoBehaviour
     private const float TitleSize  = 68f;   // artifact: 34
     private const float InputSize  = 44f;   // artifact: 22
     private const float ButtonSize = 40f;   // artifact: 20
+    private const float CountdownSize = 120f;
 
     private const int MaxNameLength = 12;   // matches the artifact's maxlength
 
     private RectTransform root;
     private RectTransform column;
+
+    private RectTransform countdownOverlay;
+    private TMP_Text countdownShadow;
+    private TMP_Text countdownFace;
+
+    private float lastEditTime;
+    private bool autoStartTriggered;
+    private Coroutine autoStartRoutine;
 
     private void Awake()
     {
@@ -66,6 +94,7 @@ public class RetroUsernamePanel : MonoBehaviour
         if (InputField != null)
         {
             InputField.onValueChanged.AddListener(UpdatePlayButtonVisibility);
+            InputField.onValueChanged.AddListener(OnTextEdited);
             UpdatePlayButtonVisibility(InputField.text);
         }
     }
@@ -73,6 +102,64 @@ public class RetroUsernamePanel : MonoBehaviour
     private void UpdatePlayButtonVisibility(string current)
     {
         if (PlayButton != null) PlayButton.gameObject.SetActive(!string.IsNullOrEmpty(current));
+    }
+
+    /// <summary>
+    /// Every keystroke pushes the idle clock back and cancels a countdown already in
+    /// progress — the player is clearly still editing, so let them.
+    /// </summary>
+    private void OnTextEdited(string current)
+    {
+        lastEditTime = Time.unscaledTime;
+
+        if (autoStartRoutine != null)
+        {
+            StopCoroutine(autoStartRoutine);
+            autoStartRoutine = null;
+            HideCountdownOverlay();
+        }
+    }
+
+    private void Update()
+    {
+        if (root == null || !root.gameObject.activeInHierarchy) return;
+        if (autoStartTriggered || autoStartRoutine != null) return;
+        if (InputField == null || InputField.text.Length < minCharactersToAutoStart) return;
+        if (Time.unscaledTime - lastEditTime < idleSecondsBeforeAutoStart) return;
+
+        autoStartRoutine = StartCoroutine(RunAutoStartCountdown());
+    }
+
+    private IEnumerator RunAutoStartCountdown()
+    {
+        countdownOverlay.gameObject.SetActive(true);
+
+        string[] beats = { "3", "2", "1", "GET READY" };
+        Color[] colours = { RetroUI.AccentCyan, RetroUI.Gold, RetroUI.AccentLocal, RetroUI.Go };
+
+        for (int i = 0; i < beats.Length; i++)
+        {
+            SetCountdownLabel(beats[i], colours[i]);
+            yield return new WaitForSecondsRealtime(autoStartStepDuration);
+        }
+
+        HideCountdownOverlay();
+        autoStartRoutine = null;
+        autoStartTriggered = true;
+
+        if (GameLogic.Instance != null) GameLogic.Instance.OnPlayButtonPressed();
+    }
+
+    private void SetCountdownLabel(string label, Color colour)
+    {
+        countdownShadow.text = label;
+        countdownFace.text = label;
+        countdownFace.color = colour;
+    }
+
+    private void HideCountdownOverlay()
+    {
+        if (countdownOverlay != null) countdownOverlay.gameObject.SetActive(false);
     }
 
     public void Show()
@@ -83,6 +170,16 @@ public class RetroUsernamePanel : MonoBehaviour
         FitToScreen();
 
         if (InputField != null) InputField.ActivateInputField();
+
+        // Fresh run: a name typed for a previous race shouldn't instantly re-trigger.
+        lastEditTime = Time.unscaledTime;
+        autoStartTriggered = false;
+        if (autoStartRoutine != null)
+        {
+            StopCoroutine(autoStartRoutine);
+            autoStartRoutine = null;
+        }
+        HideCountdownOverlay();
     }
 
     public void Hide()
@@ -132,6 +229,39 @@ public class RetroUsernamePanel : MonoBehaviour
 
         BuildInput((RectTransform)panel.transform);
         BuildPlayButton((RectTransform)panel.transform);
+
+        // Built last so it's the top sibling and draws over the whole panel, name field
+        // included — the point is to cover input while the auto-start countdown runs.
+        BuildCountdownOverlay(root);
+    }
+
+    /// <summary>
+    /// The "3, 2, 1, GET READY" auto-start overlay. Deliberately plainer than the
+    /// race-start CountdownTimer (no light strip, no pop animation) — this is a brief
+    /// "your name is locked in" notice, not the dramatic go-moment.
+    /// </summary>
+    private void BuildCountdownOverlay(RectTransform parent)
+    {
+        countdownOverlay = RetroUI.Full("AutoStartCountdown", parent,
+            new Color(RetroUI.BgDeep.r, RetroUI.BgDeep.g, RetroUI.BgDeep.b, 0.85f));
+
+        GameObject slot = new GameObject("Number", typeof(RectTransform));
+        RectTransform slotRect = (RectTransform)slot.transform;
+        slotRect.SetParent(countdownOverlay, false);
+        RetroUI.Stretch(slotRect, Vector2.zero);
+
+        // Hard drop shadow, no blur — the same convention every other retro screen uses.
+        countdownShadow = RetroUI.Label(slotRect, "3", CountdownSize,
+            new Color(0f, 0f, 0f, 0.55f), TextAlignmentOptions.Center, displayFont);
+        RetroUI.Stretch((RectTransform)countdownShadow.transform, new Vector2(6f, -6f));
+        countdownShadow.characterSpacing = 4f;
+
+        countdownFace = RetroUI.Label(slotRect, "3", CountdownSize,
+            RetroUI.AccentCyan, TextAlignmentOptions.Center, displayFont);
+        RetroUI.Stretch((RectTransform)countdownFace.transform, Vector2.zero);
+        countdownFace.characterSpacing = 4f;
+
+        countdownOverlay.gameObject.SetActive(false);
     }
 
     private void BuildInput(RectTransform parent)

@@ -72,9 +72,30 @@ public class RaceRecorder : MonoBehaviour
         }
     }
 
+    private bool permissionsRequested;
+
     private void Awake()
     {
         Instance = this;
+    }
+
+    /// <summary>
+    /// Fires the camera/mic permission dialogs without starting capture. Call this as early
+    /// as possible — ideally while the calibration screen is still up — so the OS dialog is
+    /// already resolved by the time <see cref="StartRecording"/> actually runs.
+    ///
+    /// Without this, StartRecording() kicks off the same request as a fire-and-forget
+    /// coroutine and returns immediately; whatever GameLogic does next (showing the
+    /// leaderboard) renders synchronously, while the real OS dialog takes a moment longer to
+    /// appear — so the dialog visibly lands over the leaderboard instead of over calibration,
+    /// even though nothing about the leaderboard actually triggered it.
+    /// </summary>
+    public void RequestPermissionsEarly()
+    {
+        if (!recordingEnabled || permissionsRequested) return;
+
+        permissionsRequested = true;
+        StartCoroutine(RequestPermissions());
     }
 
     /// <summary>Called by GameLogic once the calibration screen clears.</summary>
@@ -97,31 +118,19 @@ public class RaceRecorder : MonoBehaviour
 
     /// <summary>
     /// Asks for camera (and mic, if audio is being captured) before touching the capture API,
-    /// which fails silently without them. Deliberately runs here rather than at launch: this
-    /// fires as calibration clears, while the rider is still standing at the gate, so the
-    /// prompt can't land mid-run.
+    /// which fails silently without them. If RequestPermissionsEarly() already ran, both
+    /// permission checks below resolve instantly with no dialog — this is what makes
+    /// calling it early actually remove the delay rather than just moving it.
     /// </summary>
     private IEnumerator RequestPermissionsThenRecord()
     {
-        yield return RequestPermission(Permission.Camera, "camera");
+        yield return RequestPermissions();
 
         if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
         {
             Debug.LogError("[RaceRecorder] Camera permission denied — can't record. " +
                            "Grant it in Android settings and relaunch.");
             yield break;
-        }
-
-        if (audioState != AudioState.None)
-        {
-            yield return RequestPermission(Permission.Microphone, "microphone");
-
-            if (!Permission.HasUserAuthorizedPermission(Permission.Microphone))
-            {
-                // Not fatal — drop to a silent recording rather than losing the footage.
-                Debug.LogWarning("[RaceRecorder] Microphone permission denied — recording without audio.");
-                audioState = AudioState.None;
-            }
         }
 
         if (videoCapture != null)
@@ -142,6 +151,29 @@ public class RaceRecorder : MonoBehaviour
             videoCapture = capture;
             BeginVideoMode();
         });
+    }
+
+    private IEnumerator RequestPermissions()
+    {
+        yield return RequestPermission(Permission.Camera, "camera");
+
+        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        {
+            Debug.LogError("[RaceRecorder] Camera permission denied — recording won't be available.");
+            yield break;
+        }
+
+        if (audioState != AudioState.None)
+        {
+            yield return RequestPermission(Permission.Microphone, "microphone");
+
+            if (!Permission.HasUserAuthorizedPermission(Permission.Microphone))
+            {
+                // Not fatal — drop to a silent recording rather than losing the footage.
+                Debug.LogWarning("[RaceRecorder] Microphone permission denied — recording without audio.");
+                audioState = AudioState.None;
+            }
+        }
     }
 
     /// <summary>

@@ -82,6 +82,11 @@ public class GameLogic : MonoBehaviour
     {
         Debug.Log("✔ GameLogic Start ACTIVE");
 
+        // Fire the camera/mic permission dialogs now, while calibration is on screen, so
+        // they're already resolved by the time StartRecording() runs later — see
+        // RaceRecorder.RequestPermissionsEarly for why that timing matters.
+        if (RaceRecorder.Instance != null) RaceRecorder.Instance.RequestPermissionsEarly();
+
         if (MapDataFetcher.Instance == null)
         {
             Debug.LogError("No MapDataFetcher in the scene — nothing can be placed without a route.");
