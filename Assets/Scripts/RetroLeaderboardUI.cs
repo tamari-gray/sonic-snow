@@ -33,8 +33,9 @@ public class RetroLeaderboardUI : MonoBehaviour
     [Tooltip("Sort by score (highest first) rather than time (fastest first).")]
     [SerializeField] private bool sortByScore = true;
 
-    [Tooltip("Rows to show at most. The board is display-only and doesn't scroll.")]
-    [SerializeField] private int maxRows = 8;
+    [Tooltip("Rider rows to show at most. The board is display-only and doesn't scroll. " +
+             "The distance-to-start row below the riders doesn't count against this.")]
+    [SerializeField] private int maxRows = 5;
 
     private const string LeaderboardUrl =
         "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
@@ -59,6 +60,7 @@ public class RetroLeaderboardUI : MonoBehaviour
     private static readonly Color RibbonRed    = Hex("e01b2c");
     private static readonly Color RibbonShadow = Hex("8f0f1c");
     private static readonly Color RibbonBorder = Hex("14142c");
+    private static readonly Color DistanceOrange = Hex("ffa500");
 
     /// <summary>Widest the board is ever drawn. Below this it shrinks with the screen.</summary>
     private const float MaxBoardWidth = 1040f;
@@ -256,6 +258,35 @@ public class RetroLeaderboardUI : MonoBehaviour
             BuildRow(rider, rank);
             rank++;
         }
+
+        BuildDistanceRow();
+    }
+
+    /// <summary>
+    /// Last row on the board: live distance to the start line. Only meaningful while this
+    /// screen is up (GameLogic shows it exactly during SearchingForStart), so it's built
+    /// fresh each time the board populates and self-updates via StartDistanceUI rather than
+    /// needing another refresh path.
+    /// </summary>
+    private void BuildDistanceRow()
+    {
+        GameObject row = Block("DistanceRow", rowsHolder, RowDefault);
+        LayoutElement rowLayout = row.AddComponent<LayoutElement>();
+        rowLayout.minHeight = 72f;
+
+        HorizontalLayoutGroup layout = row.AddComponent<HorizontalLayoutGroup>();
+        layout.padding = new RectOffset(10, 10, 12, 12);
+        layout.childAlignment = TextAnchor.MiddleCenter;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = false;
+
+        TMP_Text label = Label(row.transform, "-- m to start", NumeralSize, DistanceOrange,
+                               TextAlignmentOptions.Center, 0f);
+        label.fontStyle = FontStyles.Bold;
+        if (numeralFont != null) label.font = numeralFont;
+        label.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+        label.gameObject.AddComponent<StartDistanceUI>().Bind(label);
     }
 
     private void BuildRow(Rider rider, int rank)

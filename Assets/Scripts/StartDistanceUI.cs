@@ -10,6 +10,10 @@ public class StartDistanceUI : MonoBehaviour
 {
     [SerializeField] private TMP_Text label;
 
+    /// <summary>For binding at runtime, e.g. when the label is built in code (see
+    /// RetroLeaderboardUI's distance row) rather than wired in the editor.</summary>
+    public void Bind(TMP_Text text) => label = text;
+
     void Update()
     {
         if (label == null || GameLogic.Instance == null) return;

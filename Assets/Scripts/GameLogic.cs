@@ -54,9 +54,19 @@ public class GameLogic : MonoBehaviour
              "tighten it on an open slope.")]
     [SerializeField] private float maxTriggerAccuracy = 20f;
 
+    [Tooltip("Don't trigger the finish on a fix worse than this, in metres. Previously unset — " +
+             "the finish had no accuracy gate at all, so a rough fix could end the race before " +
+             "the rider physically reached the beam.")]
+    [SerializeField] private float maxFinishTriggerAccuracy = 20f;
+
     [Tooltip("Seconds between proximity log lines. The on-screen log only keeps a handful of rows, " +
              "so logging this every frame buries the GeoAnchor and spawn messages you actually need.")]
     [SerializeField] private float proximityLogInterval = 1f;
+
+    [Tooltip("Time constant for smoothing the displayed distance-to-start, in seconds. Only " +
+             "affects the on-screen number — the actual start trigger below still reacts to " +
+             "the raw fix. Higher = steadier but laggier.")]
+    [SerializeField] private float distanceSmoothingSeconds = 2f;
 
     private float lastProximityLogTime = float.NegativeInfinity;
 
@@ -144,7 +154,14 @@ public class GameLogic : MonoBehaviour
         MapData config = MapDataFetcher.Instance.LoadedConfig;
 
         float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.originLat, config.originLng);
-        DistanceToStart = distance;
+
+        // The trigger check below reacts to the raw fix, same as always — only the
+        // displayed number is smoothed. A noisy fix (common; GPS accuracy is weather-
+        // independent but very sensitive to sky view / multipath) otherwise shows up as
+        // the on-screen distance jumping around even while standing still.
+        DistanceToStart = DistanceToStart < 0f
+            ? distance
+            : Mathf.Lerp(DistanceToStart, distance, Time.deltaTime / distanceSmoothingSeconds);
 
         // Everything you need to diagnose a failed start, on one line in the on-screen log.
         if (ShouldLogProximity())
@@ -220,14 +237,21 @@ public class GameLogic : MonoBehaviour
                 ? $"CP {domes.CollectedCount}/{domes.Total} | " : "";
 
             Debug.Log($"Finish line {distance:F1}m away (need <{finishProximityRadius:F0}m) | " +
-                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | {checkpoints}" +
-                      $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
+                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m (need <{maxFinishTriggerAccuracy:F0}m) | " +
+                      $"{checkpoints}anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
         }
 
-        if (distance <= finishProximityRadius)
+        if (distance > finishProximityRadius) return;
+
+        if (LocationHandler.Instance.HorizontalAccuracy > maxFinishTriggerAccuracy)
         {
-            OnFinishLineReached();
+            if (ShouldLogProximity())
+                Debug.Log($"At the finish line but the fix is only good to " +
+                          $"{LocationHandler.Instance.HorizontalAccuracy:F1}m — waiting for a better one");
+            return;
         }
+
+        OnFinishLineReached();
     }
 
     void BeginSearchingForStart()
