@@ -59,6 +59,16 @@ public class LocationHandler : MonoBehaviour
 
     private double lastPolledTimestamp = -1;
 
+    /// <summary>
+    /// Feeds fixes from <see cref="PushMockFix"/> instead of the device GPS. Set before the
+    /// scene loads (see RaceFlowSelfTest) — it's read in Start to decide whether to bring
+    /// the real service up at all. Static rather than serialized so nothing in the scene
+    /// can leave it switched on by accident in a shipped build.
+    /// </summary>
+    public static bool MockMode;
+
+    private double mockTimestamp;
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -73,7 +83,41 @@ public class LocationHandler : MonoBehaviour
 
     private void Start()
     {
+        if (MockMode)
+        {
+            Debug.Log("[LocationHandler] Mock mode — device GPS not started, fixes come from PushMockFix.");
+            return;
+        }
+
         StartCoroutine(InitializeLocationService());
+    }
+
+    /// <summary>
+    /// Injects a fix as though the device had reported it. Drives the automated flow test
+    /// and any offline run-through; ignored by everything downstream, which only ever
+    /// reads the properties below.
+    /// </summary>
+    public void PushMockFix(double lat, double lng, float accuracy, double altitude = 0d)
+    {
+        MockMode = true;
+
+        CurrentLatitude = lat;
+        CurrentLongitude = lng;
+        CurrentAltitude = altitude;
+        HorizontalAccuracy = accuracy;
+
+        // GeoAnchor diffs on this to process each fix once, so it has to keep climbing.
+        mockTimestamp += 1d;
+        LastTimestamp = mockTimestamp;
+
+        OnLocationUpdated?.Invoke(lat, lng);
+
+        if (!IsReady)
+        {
+            IsReady = true;
+            LastFailureReason = null;
+            OnLocationReady?.Invoke();
+        }
     }
 
     private IEnumerator InitializeLocationService()
@@ -165,6 +209,8 @@ public class LocationHandler : MonoBehaviour
 
     private void Update()
     {
+        if (MockMode) return;
+
         if (!IsReady && Input.location.status != LocationServiceStatus.Running) return;
         if (Input.location.status != LocationServiceStatus.Running) return;
 

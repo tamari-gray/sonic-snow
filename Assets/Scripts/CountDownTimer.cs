@@ -65,6 +65,9 @@ public class CountdownTimer : MonoBehaviour
         root.gameObject.SetActive(false);
     }
 
+    /// <summary>True while the countdown is on screen. Read by the automated flow test.</summary>
+    public bool IsRunning => root != null && root.gameObject.activeSelf;
+
     public void StartCountdown(System.Action onComplete)
     {
         StartCoroutine(RunCountdown(onComplete));

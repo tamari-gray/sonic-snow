@@ -22,7 +22,6 @@ public static class XREALCanvasConversion
     {
         "CalibrationPanel",
         "CountdownCanvas",
-        "LeaderboardCanvas",
         "Canvas",
         "UsernameCanvas",
         "CalibrationScreen",

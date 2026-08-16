@@ -248,20 +248,31 @@ public static class RetroUI
         }
     }
 
-    /// <summary>
-    /// The cyan-bordered panel: a border-coloured block with the panel colour inset,
-    /// sized by its own content.
-    /// </summary>
+    /// <summary>The cyan-bordered panel — see the full overload below. Kept for existing callers.</summary>
     public static GameObject BorderedPanel(RectTransform parent, RectOffset padding, float spacing)
+        => BorderedPanel(parent, padding, spacing, AccentCyan, Panel);
+
+    /// <summary>Border colour only — see the full overload below. Fill stays RetroUI's own Panel tone.</summary>
+    public static GameObject BorderedPanel(RectTransform parent, RectOffset padding, float spacing,
+                                           Color borderColour)
+        => BorderedPanel(parent, padding, spacing, borderColour, Panel);
+
+    /// <summary>
+    /// A border-coloured block with the fill colour inset, sized by its own content. Both
+    /// colours are parameters rather than always AccentCyan/Panel so a screen with its own
+    /// palette (see FinishScoreUI) isn't forced into the arcade-cabinet cyan/gold scheme.
+    /// </summary>
+    public static GameObject BorderedPanel(RectTransform parent, RectOffset padding, float spacing,
+                                           Color borderColour, Color fillColour)
     {
-        GameObject outer = Block("Panel", parent, AccentCyan);
+        GameObject outer = Block("Panel", parent, borderColour);
         VerticalLayoutGroup outerLayout = outer.AddComponent<VerticalLayoutGroup>();
         outerLayout.padding = new RectOffset(5, 5, 5, 5);
         outerLayout.childForceExpandWidth = true;
         outerLayout.childForceExpandHeight = false;
         outer.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        GameObject inner = Block("PanelInner", (RectTransform)outer.transform, Panel);
+        GameObject inner = Block("PanelInner", (RectTransform)outer.transform, fillColour);
         VerticalLayoutGroup innerLayout = inner.AddComponent<VerticalLayoutGroup>();
         innerLayout.padding = padding;
         innerLayout.spacing = spacing;

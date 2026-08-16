@@ -13,8 +13,14 @@ using UnityEngine.XR.ARFoundation;
 /// they lower the phone during startup and every placement is off by however far
 /// they moved.
 ///
-/// Readiness is four separate conditions, reported individually so a stall on the
-/// hill is diagnosable rather than a mystery spinner.
+/// Readiness is five separate conditions, reported individually so a stall on the
+/// hill is diagnosable rather than a mystery spinner. The fifth — distance to start —
+/// used to live in GameLogic as a per-frame check that ran only after this screen
+/// closed. It moved here instead: since this screen only runs once per app launch and
+/// the current workflow is a fresh launch per run anyway, there's no need for a
+/// separate live "searching for start" loop afterwards. Once all five clear, the race
+/// is triggered immediately — checkpoints and the finish beam spawn and the countdown
+/// starts the moment this screen closes.
 /// </summary>
 public class CalibrationScreen : MonoBehaviour
 {
@@ -57,6 +63,16 @@ public class CalibrationScreen : MonoBehaviour
     [Tooltip("How long to leave the 'calibrated' confirmation up before hiding, in seconds.")]
     [SerializeField] private float confirmationSeconds = 1.2f;
 
+    [Tooltip("How close to the start line counts as ready, in metres. This condition IS the " +
+             "start-gate trigger now — clearing it is what spawns checkpoints/finish and starts " +
+             "the countdown, same radius GameLogic used to check every frame after this screen.")]
+    [SerializeField] private float startDistanceThreshold = 10f;
+
+    [Tooltip("GPS accuracy required specifically for the distance-to-start condition, in metres. " +
+             "Tighter than the general GPS-fix requirement above (15m) — that one only has to be " +
+             "good enough to let calibration proceed, this one gates actually spawning content.")]
+    [SerializeField] private float startAccuracyThreshold = 10f;
+
     /// <summary>True once calibration is complete and the game may start.</summary>
     public bool IsReady { get; private set; }
 
@@ -98,27 +114,44 @@ public class CalibrationScreen : MonoBehaviour
 
         bool steady = UpdateSteadiness(tracking);
 
+        // Computed directly from LocationHandler/MapDataFetcher rather than reading
+        // GameLogic.DistanceToStart — GameLogic doesn't arm its own Update() until this
+        // screen reports ready, so that value wouldn't exist yet. Same reasoning as the
+        // "armed" gate: this screen can't depend on state that only exists after it closes.
+        float distance = -1f;
+        bool atStartLine = false;
+
+        if (routeLoaded && location != null && location.IsReady)
+        {
+            MapData config = MapDataFetcher.Instance.LoadedConfig;
+            distance = GpsUtils.HaversineDistance(location.CurrentLatitude, location.CurrentLongitude,
+                                                  config.originLat, config.originLng);
+            atStartLine = distance <= startDistanceThreshold && location.HorizontalAccuracy <= startAccuracyThreshold;
+        }
+
         if (statusText != null)
         {
             statusText.text =
                 Line("AR tracking", tracking) + "\n" +
                 Line("Holding steady", steady) + "\n" +
                 Line("Route data", routeLoaded) + "\n" +
-                Line("GPS fix", gpsReady, GpsDetail(location));
+                Line("GPS fix", gpsReady, GpsDetail(location)) + "\n" +
+                Line("Distance to start", atStartLine, StartDistanceDetail(distance, location, routeLoaded));
         }
 
         elapsedOnScreen += Time.deltaTime;
 
         bool timedOut = overallTimeoutSeconds > 0f && elapsedOnScreen >= overallTimeoutSeconds;
 
-        if (!(tracking && steady && routeLoaded && gpsReady))
+        if (!(tracking && steady && routeLoaded && gpsReady && atStartLine))
         {
             if (!timedOut) return;
 
             Debug.LogWarning($"[CalibrationScreen] Timed out after {overallTimeoutSeconds:F0}s and " +
                              $"proceeding anyway. tracking={tracking} steady={steady} " +
-                             $"route={routeLoaded} gps={gpsReady}. Placement will be rough, and if " +
-                             $"GPS never arrives the start line won't trigger at all.");
+                             $"route={routeLoaded} gps={gpsReady} atStartLine={atStartLine}. Placement " +
+                             $"will be rough, and if GPS never arrives the race will start wherever " +
+                             $"the player happens to be standing.");
         }
 
         // Everything is up and the phone has been still for a moment. Latch the
@@ -178,6 +211,22 @@ public class CalibrationScreen : MonoBehaviour
         return steadyTimer >= steadyHoldSeconds;
     }
 
+    /// <summary>
+    /// Completes calibration without waiting on the readiness conditions. For the
+    /// automated flow test, which runs in the Editor where there is no AR session to
+    /// establish tracking and so would otherwise sit here until the overall timeout.
+    /// </summary>
+    public void ForceReady(string reason)
+    {
+        if (IsReady) return;
+
+        Debug.Log($"[CalibrationScreen] Forced ready — {reason}");
+
+        if (GeoAnchor.Instance != null) GeoAnchor.Instance.RecaptureLaunchPose();
+
+        Finish();
+    }
+
     private void Finish()
     {
         IsReady = true;
@@ -210,6 +259,17 @@ public class CalibrationScreen : MonoBehaviour
             return location.IsRetrying ? $"retrying — {location.LastFailureReason}" : location.LastFailureReason;
 
         return "searching for satellites";
+    }
+
+    /// <summary>Live distance/accuracy readout against both thresholds, so the last few
+    /// metres of walking to the gate are visible instead of a flat "not yet".</summary>
+    private string StartDistanceDetail(float distance, LocationHandler location, bool routeLoaded)
+    {
+        if (!routeLoaded) return "waiting on route data";
+        if (location == null || !location.IsReady) return "waiting on GPS";
+
+        return $"{distance:F0}m away, ±{location.HorizontalAccuracy:F0}m " +
+               $"(need <{startDistanceThreshold:F0}m, ±{startAccuracyThreshold:F0}m)";
     }
 
     private static string Line(string label, bool done, string detail = null)

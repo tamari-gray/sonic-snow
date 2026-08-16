@@ -12,14 +12,29 @@ public class RaceTimer : MonoBehaviour
 
     public float ElapsedTime => elapsedTime;
 
+    /// <summary>True while the clock is counting. Read by the automated flow test.</summary>
+    public bool IsRunning => isRunning;
+
     private void Awake()
     {
         instance = this;
+
+        // Sits on the head-locked HUD canvas as a sibling of the calibration panel, not a
+        // child of it — so with no gating of its own it was showing "0.000" through the
+        // whole calibration hold. Hidden until GameLogic calls Show(), once calibration
+        // actually clears.
+        if (timerText != null) timerText.gameObject.SetActive(false);
     }
 
     void Start()
     {
         UpdateTimerText();
+    }
+
+    /// <summary>Reveals the timer text. Call once calibration finishes — see GameLogic.Start().</summary>
+    public void Show()
+    {
+        if (timerText != null) timerText.gameObject.SetActive(true);
     }
 
     void Update()
