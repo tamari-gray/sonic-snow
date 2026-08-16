@@ -7,20 +7,27 @@ using TMPro;
 ///
 /// Translates the design's textPop CSS keyframe directly: pop in with a slight overshoot
 /// through the first 30% of the lifetime, hold at full size/opacity through 70%, then fade
-/// out over the last 30% while still drifting upward.
+/// out over the last 30% while still drifting upward. Progress is quantized into
+/// <see cref="stepCount"/> discrete jumps before driving any of that — the reference
+/// animates with steps(8, end), not a smooth per-frame ease, matching this project's other
+/// pixel-art motion (StepBob, DistanceLabelScaler's quantizeSteps).
 /// </summary>
 public class RetroLabelPop : MonoBehaviour
 {
     private TMP_Text label;
+    private TMP_Text shadow;
     private float duration;
+    private int stepCount;
     private float elapsed;
     private Vector3 startLocalPosition;
     private float riseDistance;
 
-    public void Init(TMP_Text target, float lifetimeSeconds, float rise = 0.35f)
+    public void Init(TMP_Text target, TMP_Text shadowTarget, float lifetimeSeconds, float rise = 0.35f, int steps = 8)
     {
         label = target;
+        shadow = shadowTarget;
         duration = Mathf.Max(lifetimeSeconds, 0.01f);
+        stepCount = Mathf.Max(steps, 1);
         riseDistance = rise;
         startLocalPosition = transform.localPosition;
     }
@@ -28,7 +35,10 @@ public class RetroLabelPop : MonoBehaviour
     private void Update()
     {
         elapsed += Time.deltaTime;
-        float t = Mathf.Clamp01(elapsed / duration);
+        float rawT = Mathf.Clamp01(elapsed / duration);
+
+        // steps(n, end): hold each step's starting value until its boundary, then jump.
+        float t = rawT >= 1f ? 1f : Mathf.Floor(rawT * stepCount) / stepCount;
 
         float scale;
         float alpha;
@@ -59,13 +69,17 @@ public class RetroLabelPop : MonoBehaviour
         transform.localPosition = startLocalPosition + Vector3.up * (riseT * riseDistance);
         transform.localScale = Vector3.one * scale;
 
-        if (label != null)
-        {
-            Color c = label.color;
-            c.a = alpha;
-            label.color = c;
-        }
+        SetAlpha(label, alpha);
+        SetAlpha(shadow, alpha);
 
-        if (t >= 1f) Destroy(gameObject);
+        if (rawT >= 1f) Destroy(gameObject);
+    }
+
+    private static void SetAlpha(TMP_Text text, float alpha)
+    {
+        if (text == null) return;
+        Color c = text.color;
+        c.a = alpha;
+        text.color = c;
     }
 }

@@ -175,14 +175,14 @@ internal static class RetroBurstEffect
         colorOverLifetime.color = FadeAlphaOnly();
 
         ps.gameObject.SetActive(true);
-        ps.Play();
+        ps.gameObject.AddComponent<SteppedParticlePlayer>().Init(ps, RingLifetime, RingSteps);
     }
 
     // --- burst: the confetti scatter, upward-biased with the caller's four colours -----
 
     private static void BuildBurst(Transform parent, Material material, Config config)
     {
-        const int count = 28;
+        const int count = 32; // matches the reference's 32 pixels exactly
         ParticleSystem ps = CreateSystem("Burst", parent, material, count);
 
         var main = ps.main;
@@ -190,7 +190,12 @@ internal static class RetroBurstEffect
         main.startLifetime = BurstLifetime;
         main.startSpeed = new ParticleSystem.MinMaxCurve(1.6f * config.Scale, 3.2f * config.Scale);
         main.startSize = new ParticleSystem.MinMaxCurve(0.03f * config.Scale, 0.07f * config.Scale);
-        main.gravityModifier = 0.4f; // arcs up then settles, rather than a flat scatter
+        // No gravity: the reference's flyOut is a dead-straight translate from origin to
+        // (dx, dy), never an arc that falls back down. A previous version of this code added
+        // gravityModifier=0.4 as a deliberate stylistic departure ("arcs up then settles,
+        // rather than a flat scatter") — reverted, since the brief is to match the reference,
+        // not improve on it.
+        main.gravityModifier = 0f;
         main.startColor = new ParticleSystem.MinMaxGradient(SteppedGradient(config.BurstColours))
         {
             mode = ParticleSystemGradientMode.RandomColor
@@ -209,7 +214,7 @@ internal static class RetroBurstEffect
         colorOverLifetime.color = FadeAlphaOnly(); // multiplies against the random start colour above
 
         ps.gameObject.SetActive(true);
-        ps.Play();
+        ps.gameObject.AddComponent<SteppedParticlePlayer>().Init(ps, BurstLifetime, BurstSteps);
     }
 
     // --- label: pops in, floats up, fades out -------------------------------------------
@@ -220,19 +225,37 @@ internal static class RetroBurstEffect
         go.transform.SetParent(parent, false);
         go.transform.localPosition = new Vector3(0f, 0.35f * config.Scale, 0f);
 
+        // Reads correctly from whatever angle the rider actually approached from — same
+        // reasoning as the checkpoint/finish markers' own text, see Billboard.cs. Sits on
+        // the parent so the shadow child below inherits it for free — same pattern as
+        // FinishLineTextShadow (see XREALPortBatch.UpdateFinishLinePrefab).
+        go.AddComponent<Billboard>();
+
+        float fontSize = 3.2f * config.Scale;
+
+        // The reference's text-shadow is a hard, unblurred offset duplicate (2px right,
+        // 2px down at a 13px font — a ~15% ratio), not a stroke around the glyph edges. A
+        // TMP outline hugs every side of every letter evenly, which reads as a border, not
+        // a shadow — built as a separate offset child instead, the same technique already
+        // established for FinishLineText's own shadow.
+        float shadowOffset = fontSize * 0.15f;
+        GameObject shadowGo = new GameObject("LabelShadow");
+        shadowGo.transform.SetParent(go.transform, false);
+        shadowGo.transform.localPosition = new Vector3(shadowOffset, -shadowOffset, 0.02f);
+
+        TextMeshPro shadowText = shadowGo.AddComponent<TextMeshPro>();
+        shadowText.text = config.LabelText;
+        shadowText.color = config.LabelShadowColour;
+        shadowText.fontSize = fontSize;
+        shadowText.alignment = TextAlignmentOptions.Center;
+
         TextMeshPro text = go.AddComponent<TextMeshPro>();
         text.text = config.LabelText;
         text.color = config.LabelColour;
-        text.fontSize = 3.2f * config.Scale;
+        text.fontSize = fontSize;
         text.alignment = TextAlignmentOptions.Center;
-        text.outlineWidth = 0.15f;
-        text.outlineColor = config.LabelShadowColour;
 
-        // Reads correctly from whatever angle the rider actually approached from — same
-        // reasoning as the checkpoint/finish markers' own text, see Billboard.cs.
-        go.AddComponent<Billboard>();
-
-        go.AddComponent<RetroLabelPop>().Init(text, TextLifetime, 0.35f * config.Scale);
+        go.AddComponent<RetroLabelPop>().Init(text, shadowText, TextLifetime, 0.35f * config.Scale, TextSteps);
     }
 
     // --- shared setup ------------------------------------------------------------------
