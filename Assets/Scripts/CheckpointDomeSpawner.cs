@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -20,6 +21,13 @@ public class CheckpointDomeSpawner : MonoBehaviour
     [Header("Collection")]
     [Tooltip("How close the rider has to get for a checkpoint to count, in metres.")]
     [SerializeField] private float collectRadius = 10f;
+
+    [Header("Collect Effect")]
+    [Tooltip("How long the dome instance takes to shrink away once collected, in seconds. " +
+             "Matches the design's own dome-collapse timing (~420ms). The particle burst " +
+             "plays on its own separate timing — see CheckpointCollectEffect. This only " +
+             "scales the spawned instance's transform; the prefab itself is never touched.")]
+    [SerializeField] private float shrinkDuration = 0.42f;
 
     /// <summary>A spawned dome together with the coordinate it actually answers to.</summary>
     private class Checkpoint
@@ -136,12 +144,49 @@ public class CheckpointDomeSpawner : MonoBehaviour
         checkpoint.Collected = true;
         CollectedCount++;
 
-        // Hidden rather than destroyed: ClearDomes tears them down between races anyway,
-        // and keeping the instance means indices stay valid for anything holding one.
-        if (checkpoint.Instance != null) checkpoint.Instance.SetActive(false);
+        if (checkpoint.Instance != null)
+        {
+            if (GeoAnchor.Instance != null)
+                CheckpointCollectEffect.Play(GeoAnchor.Instance.Root, checkpoint.Instance.transform.localPosition);
+
+            // Shrunk then hidden rather than hidden outright: ClearDomes still tears the
+            // instance down between races, and keeping it around (just invisible, scaled
+            // to zero) means indices stay valid for anything holding one, same as before.
+            StartCoroutine(ShrinkAndHide(checkpoint.Instance, shrinkDuration));
+        }
 
         Debug.Log($"Checkpoint {index + 1} reached at {distance:F1}m — " +
                   $"{CollectedCount}/{checkpoints.Count} collected");
+    }
+
+    /// <summary>
+    /// Scales the dome instance down to nothing, then deactivates it. Runs on
+    /// CheckpointDomeSpawner rather than the dome itself so it isn't cut short by the
+    /// dome's own SetActive(false) at the end. Only ever touches this one instance's
+    /// transform — never the prefab or its materials.
+    /// </summary>
+    private IEnumerator ShrinkAndHide(GameObject dome, float duration)
+    {
+        Vector3 startScale = dome.transform.localScale;
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            // Bails cleanly if a new race's ClearDomes() destroys this instance mid-shrink.
+            if (dome == null) yield break;
+
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = t * t; // ease-in: starts slow, collapses fast — a pop, not a fade
+
+            dome.transform.localScale = Vector3.Lerp(startScale, Vector3.zero, eased);
+            yield return null;
+        }
+
+        if (dome == null) yield break;
+
+        dome.transform.localScale = Vector3.zero;
+        dome.SetActive(false);
     }
 
     public void ClearDomes()

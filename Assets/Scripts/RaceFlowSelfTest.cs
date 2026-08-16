@@ -191,7 +191,7 @@ public class RaceFlowSelfTest : MonoBehaviour
         // --- countdown completes ----------------------------------------------------
         yield return WaitFor(() => GameLogic.Instance.CurrentState == GameLogic.GameState.Racing,
                              15f, "countdown to finish");
-        Mark("countdown finished — racing begins (real timing: 4 beats x CountdownTimer.stepDuration)");
+        Mark("countdown finished — racing begins (real timing: 6 beats x CountdownTimer.stepDuration)");
 
         Check("racing once the countdown ends",
               GameLogic.Instance.CurrentState == GameLogic.GameState.Racing);
