@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: FinishBaseGlow
-  m_Shader: {fileID: 4800000, guid: b5e54152e2a1129469b0191d3d47bbc5, type: 3}
+  m_Name: PillarRetroChecker
+  m_Shader: {fileID: 4800000, guid: ea891c88a87d11f398c2b8a228eb5c3f, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -25,16 +25,14 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
+    - _BaseFadeOffset: 0.5
+    - _BaseFadeRange: 4.5
+    - _Body: 0.88
+    - _CellPx: 10
     - _Intensity: 1
-    - _PulseSpeed: 1.6
-    - _Radius: 1
-    - _Rings: 4
-    - _SpinSpeed: 0.5
-    - _WedgeCount: 8
-    - _WedgeDim: 0.25
-    - _ZTest: 8
+    - _TopFadeRange: 6
+    - _TopFadeStart: 13
     m_Colors:
     - _CoreColor: {r: 1, g: 0.292, b: 0.003, a: 1}
-    - _RimColor: {r: 1, g: 0.75, b: 0.28, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

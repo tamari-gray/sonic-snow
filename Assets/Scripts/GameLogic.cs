@@ -401,6 +401,9 @@ public class GameLogic : MonoBehaviour
         int checkpointsCollected = CheckpointDomeSpawner.Instance != null ? CheckpointDomeSpawner.Instance.CollectedCount : 0;
         int checkpointsTotal = CheckpointDomeSpawner.Instance != null ? CheckpointDomeSpawner.Instance.Total : 0;
 
+        if (FinishLinePillar.Instance != null && GeoAnchor.Instance != null)
+            FinishCollectEffect.Play(GeoAnchor.Instance.Root, FinishLinePillar.Instance.LocalPosition);
+
         if (FinishScoreUI.Instance != null)
             FinishScoreUI.Instance.Show(playerUsername, elapsedSeconds, checkpointsCollected, checkpointsTotal);
         else

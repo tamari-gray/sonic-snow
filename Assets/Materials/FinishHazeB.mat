@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: FinishHazeB
-  m_Shader: {fileID: 4800000, guid: 9441b25b80c23cd408599e9dd1deeb73, type: 3}
+  m_Shader: {fileID: 4800000, guid: 17755a852db92c24fb62ca181e266be5, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -19,20 +19,20 @@ Material:
   m_CustomRenderQueue: -1
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties: 
+  m_LockedProperties:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _DriftAmount: 0.05
-    - _DriftPeriod: 9.5
-    - _Falloff: 3.4
-    - _Intensity: 0.45
-    - _PulseAmount: 0
-    - _PulsePeriod: 0
+    - _DitherCellPx: 2
+    - _HeightCentre: 0.42
+    - _HeightFalloff: 0.55
+    - _ScrollSpeed: -7
+    - _WidthInner: 0.25
+    - _WidthOuter: 0.5
     - _ZTest: 8
     m_Colors:
-    - _Color: {r: 1, g: 0.26, b: 0.01, a: 1}
+    - _RimColor: {r: 1, g: 0.75, b: 0.28, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

@@ -22,6 +22,11 @@ public class FinishLinePillar : MonoBehaviour
 
     private GameObject spawnedPillar;
 
+    /// <summary>The spawned beam's position in GeoAnchor.Root's local space, for anything
+    /// that needs to place itself alongside it (see FinishCollectEffect). Zero if no beam
+    /// is currently spawned.</summary>
+    public Vector3 LocalPosition => spawnedPillar != null ? spawnedPillar.transform.localPosition : Vector3.zero;
+
     private void Awake()
     {
         Instance = this;

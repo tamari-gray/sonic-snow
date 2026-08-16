@@ -2,26 +2,26 @@ using UnityEngine;
 using TMPro;
 
 /// <summary>
-/// Drives the "+1 CHECKPOINT" label's pop-in/float-up/fade-out, then destroys its own
-/// GameObject. Spawned by CheckpointCollectEffect, which owns the timing constant.
+/// Drives a floating label's pop-in/float-up/fade-out, then destroys its own GameObject.
+/// Spawned by RetroBurstEffect, which owns the timing constant and per-effect scale.
 ///
 /// Translates the design's textPop CSS keyframe directly: pop in with a slight overshoot
 /// through the first 30% of the lifetime, hold at full size/opacity through 70%, then fade
 /// out over the last 30% while still drifting upward.
 /// </summary>
-public class CheckpointLabelPop : MonoBehaviour
+public class RetroLabelPop : MonoBehaviour
 {
     private TMP_Text label;
     private float duration;
     private float elapsed;
     private Vector3 startLocalPosition;
+    private float riseDistance;
 
-    private const float RiseDistance = 0.35f;
-
-    public void Init(TMP_Text target, float lifetimeSeconds)
+    public void Init(TMP_Text target, float lifetimeSeconds, float rise = 0.35f)
     {
         label = target;
         duration = Mathf.Max(lifetimeSeconds, 0.01f);
+        riseDistance = rise;
         startLocalPosition = transform.localPosition;
     }
 
@@ -56,7 +56,7 @@ public class CheckpointLabelPop : MonoBehaviour
             riseT = Mathf.Lerp(0.7f, 1f, p);
         }
 
-        transform.localPosition = startLocalPosition + Vector3.up * (riseT * RiseDistance);
+        transform.localPosition = startLocalPosition + Vector3.up * (riseT * riseDistance);
         transform.localScale = Vector3.one * scale;
 
         if (label != null)
