@@ -56,10 +56,16 @@ existing route is overwritten.
 
 ### Altitude
 
-Leave it **off** for anything flat. The elevation API samples a ~30 m grid and rounds
-to whole metres, so on a street the rounding is larger than the real relief and you are
-feeding the game noise — which plants the finish beam in the air. **Check elevations**
-tells you whether there is enough drop to be worth using.
+Altitudes come from LINZ's surveyed LiDAR (1 m grid, ~0.2 m accuracy) wherever a point
+falls inside a flown survey — `linz-2021` over Queenstown/Frankton/Arthurs Point, and
+`linz-2016` over the wider area including The Remarkables ski field. Outside both, the
+point falls back to a global terrain grid that samples at ~30 m and rounds to whole
+metres, so on a street the rounding is larger than the real relief and you would be
+feeding the game noise — which plants the finish beam in the air.
+
+The editor decides for you: **Check elevations** shows the per-point source and, when
+there is too little relief to trust, sends altitudes as zero so the game places
+everything flat at start-gate height.
 
 ### Route length
 
