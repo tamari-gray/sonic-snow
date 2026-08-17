@@ -223,10 +223,11 @@
         <div id="elevOut"></div>
         <p class="hint" style="margin:8px 0 0">
           Refetched automatically after every point placed, dragged, or deleted. Uses LINZ's
-          surveyed Queenstown LiDAR (1&nbsp;m grid, ~0.2&nbsp;m accuracy) where a point falls
-          inside the survey area, and falls back to a coarser global terrain grid
-          (~30&nbsp;m, quantised to whole metres) outside it &mdash; the per&#8209;point
-          source is shown below. On routes with too little relief to trust, altitudes are
+          surveyed LiDAR (1&nbsp;m grid, ~0.2&nbsp;m accuracy) where a point falls inside a
+          flown survey &mdash; <code>linz-2021</code> covers Queenstown/Frankton/Arthurs Point,
+          <code>linz-2016</code> reaches wider and covers The Remarkables ski field &mdash; and
+          falls back to a coarser global terrain grid (~30&nbsp;m, quantised to whole metres)
+          outside both &mdash; the per&#8209;point source is shown below. On routes with too little relief to trust, altitudes are
           sent as zero and the game places everything flat at start&#8209;gate height, which
           is correct for a flat route.
         </p>
@@ -262,31 +263,75 @@
 const DB_ROOT   = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/.json";
 const ELEV_API  = "https://api.open-meteo.com/v1/elevation";
 
-// LINZ's real 2021 LiDAR survey of Queenstown — 1 m resolution, ~0.2 m vertical
-// accuracy, vs. Open-Meteo's ~30 m global terrain grid (which was measured off
-// by 5-10 m here). Public "Registry of Open Data on AWS" bucket: no API key,
-// CORS-open, and served as Cloud-Optimized GeoTIFFs so a browser can range-read
-// just the pixel it needs instead of downloading whole tiles.
-// Source: https://nz-elevation.s3-ap-southeast-2.amazonaws.com/otago/queenstown_2021/dem_1m/2193/collection.json
-const LINZ_DEM_BASE = "https://nz-elevation.s3-ap-southeast-2.amazonaws.com/otago/queenstown_2021/dem_1m/2193/";
-
-// bbox = [minLon, minLat, maxLon, maxLat] (WGS84), lifted from each tile's STAC item.
-// Covers the Queenstown/Frankton/Arthurs Point urban survey extent — routes outside
-// this (e.g. further up a backcountry hill) fall back to Open-Meteo automatically.
-const LINZ_DEM_TILES = [
-  { file: "CB11_10000_0502.tiff", bbox: [168.6470037, -44.9827244, 168.7125363, -44.9157948] },
-  { file: "CB11_10000_0503.tiff", bbox: [168.7077126, -44.9849944, 168.7731847, -44.9180918] },
-  { file: "CB11_10000_0504.tiff", bbox: [168.7684288, -44.9872322, 168.8338402, -44.9203567] },
-  { file: "CB11_10000_0505.tiff", bbox: [168.8291521, -44.9894378, 168.8945028, -44.9225895] },
-  { file: "CC11_10000_0101.tiff", bbox: [168.5813264, -45.0450484, 168.6470037, -44.9780878] },
-  { file: "CC11_10000_0102.tiff", bbox: [168.6420959, -45.0473558, 168.7077126, -44.9804222] },
-  { file: "CC11_10000_0103.tiff", bbox: [168.7028727, -45.0496309, 168.7684288, -44.9827244] },
-  { file: "CC11_10000_0104.tiff", bbox: [168.7636568, -45.0518737, 168.8291521, -44.9849944] },
-  { file: "CC11_10000_0105.tiff", bbox: [168.8244481, -45.0540842, 168.8898824, -44.9872322] },
-  { file: "CC11_10000_0201.tiff", bbox: [168.5763338, -45.1096735, 168.6420959, -45.0427088] },
-  { file: "CC11_10000_0202.tiff", bbox: [168.6371714, -45.111986,  168.7028727, -45.0450484] },
-  { file: "CC11_10000_0203.tiff", bbox: [168.6980164, -45.1142662, 168.7636568, -45.0473558] },
-  { file: "CC11_10000_0204.tiff", bbox: [168.7588686, -45.1165141, 168.8244481, -45.0496309] },
+// LINZ's real LiDAR surveys of the area — 1 m resolution, ~0.2 m vertical accuracy,
+// vs. Open-Meteo's ~30 m global terrain grid (which was measured off by 5-10 m here).
+// Public "Registry of Open Data on AWS" bucket: no API key, CORS-open, and served as
+// Cloud-Optimized GeoTIFFs so a browser can range-read just the pixel it needs
+// instead of downloading whole tiles.
+//
+// Tried in order, so put the newest/tightest survey first: a point takes the first
+// survey that has a real pixel for it, and only falls through to Open-Meteo when no
+// survey does. bbox = [minLon, minLat, maxLon, maxLat] (WGS84), lifted from each
+// tile's STAC item in the survey's collection.json.
+//
+// Note a tile bbox is the axis-aligned hull of a tile that's actually rectangular in
+// NZTM, so bboxes overlap and a point inside one can still miss its raster — see
+// sampleLinzElevation(), which is why this is a flat list of candidates rather than a
+// lookup keyed on position.
+const LINZ_SURVEYS = [
+  {
+    // Queenstown/Frankton/Arthurs Point urban survey. Tightest data we have, but it
+    // stops well short of the ski fields.
+    // https://nz-elevation.s3-ap-southeast-2.amazonaws.com/otago/queenstown_2021/dem_1m/2193/collection.json
+    id: "linz-2021",
+    base: "https://nz-elevation.s3-ap-southeast-2.amazonaws.com/otago/queenstown_2021/dem_1m/2193/",
+    tiles: [
+      { file: "CB11_10000_0502.tiff", bbox: [168.6470037, -44.9827244, 168.7125363, -44.9157948] },
+      { file: "CB11_10000_0503.tiff", bbox: [168.7077126, -44.9849944, 168.7731847, -44.9180918] },
+      { file: "CB11_10000_0504.tiff", bbox: [168.7684288, -44.9872322, 168.8338402, -44.9203567] },
+      { file: "CB11_10000_0505.tiff", bbox: [168.8291521, -44.9894378, 168.8945028, -44.9225895] },
+      { file: "CC11_10000_0101.tiff", bbox: [168.5813264, -45.0450484, 168.6470037, -44.9780878] },
+      { file: "CC11_10000_0102.tiff", bbox: [168.6420959, -45.0473558, 168.7077126, -44.9804222] },
+      { file: "CC11_10000_0103.tiff", bbox: [168.7028727, -45.0496309, 168.7684288, -44.9827244] },
+      { file: "CC11_10000_0104.tiff", bbox: [168.7636568, -45.0518737, 168.8291521, -44.9849944] },
+      { file: "CC11_10000_0105.tiff", bbox: [168.8244481, -45.0540842, 168.8898824, -44.9872322] },
+      { file: "CC11_10000_0201.tiff", bbox: [168.5763338, -45.1096735, 168.6420959, -45.0427088] },
+      { file: "CC11_10000_0202.tiff", bbox: [168.6371714, -45.111986,  168.7028727, -45.0450484] },
+      { file: "CC11_10000_0203.tiff", bbox: [168.6980164, -45.1142662, 168.7636568, -45.0473558] },
+      { file: "CC11_10000_0204.tiff", bbox: [168.7588686, -45.1165141, 168.8244481, -45.0496309] },
+    ],
+  },
+  {
+    // Otago Regional Council's 2016 survey, same 1 m grid but a much wider footprint:
+    // it's the one that reaches The Remarkables. Measured coverage over the ski field
+    // (every lift and marked run in OSM) is 96.5% — the only hole is the top of Curvey
+    // Basin, roughly lat -45.0640..-45.0600 / lng 168.8196..168.8247, which no other
+    // published survey fills either, so those points fall back to Open-Meteo.
+    // https://nz-elevation.s3-ap-southeast-2.amazonaws.com/otago/queenstown_2016/dem_1m/2193/collection.json
+    id: "linz-2016",
+    base: "https://nz-elevation.s3-ap-southeast-2.amazonaws.com/otago/queenstown_2016/dem_1m/2193/",
+    tiles: [
+      { file: "CB11_10000_0501.tiff", bbox: [168.5863022, -44.9804222, 168.6518951, -44.9134657] },
+      { file: "CB11_10000_0502.tiff", bbox: [168.6470037, -44.9827244, 168.7125363, -44.9157948] },
+      { file: "CB11_10000_0503.tiff", bbox: [168.7077126, -44.9849944, 168.7731847, -44.9180918] },
+      { file: "CB11_10000_0504.tiff", bbox: [168.7684288, -44.9872322, 168.8338402, -44.9203567] },
+      { file: "CB11_10000_0505.tiff", bbox: [168.8291521, -44.9894378, 168.8945028, -44.9225895] },
+      { file: "CB12_10000_0501.tiff", bbox: [168.8898824, -44.9916112, 168.9551722, -44.9247902] },
+      { file: "CC11_10000_0101.tiff", bbox: [168.5813264, -45.0450484, 168.6470037, -44.9780878] },
+      { file: "CC11_10000_0102.tiff", bbox: [168.6420959, -45.0473558, 168.7077126, -44.9804222] },
+      { file: "CC11_10000_0103.tiff", bbox: [168.7028727, -45.0496309, 168.7684288, -44.9827244] },
+      { file: "CC11_10000_0104.tiff", bbox: [168.7636568, -45.0518737, 168.8291521, -44.9849944] },
+      { file: "CC11_10000_0105.tiff", bbox: [168.8244481, -45.0540842, 168.8898824, -44.9872322] },
+      { file: "CC11_10000_0201.tiff", bbox: [168.5763338, -45.1096735, 168.6420959, -45.0427088] },
+      { file: "CC11_10000_0202.tiff", bbox: [168.6371714, -45.1119860, 168.7028727, -45.0450484] },
+      { file: "CC11_10000_0203.tiff", bbox: [168.6980164, -45.1142662, 168.7636568, -45.0473558] },
+      { file: "CC11_10000_0204.tiff", bbox: [168.7588686, -45.1165141, 168.8244481, -45.0496309] },
+      { file: "CC11_10000_0205.tiff", bbox: [168.8197281, -45.1187296, 168.8852464, -45.0518737] },
+      { file: "CC11_10000_0303.tiff", bbox: [168.6931436, -45.1789005, 168.7588686, -45.1119860] },
+      { file: "CC11_10000_0304.tiff", bbox: [168.7540643, -45.1811534, 168.8197281, -45.1142662] },
+      { file: "CC12_10000_0101.tiff", bbox: [168.8852464, -45.0562625, 168.9506197, -44.9894378] },
+    ],
+  },
 ];
 
 // NZTM2000 — the CRS the DEM tiles are actually georeferenced in. Points have to be
@@ -585,53 +630,71 @@ function drawJson() {
 
 /* ---------------------------------------------------------------- elevation */
 
-// filename -> Promise<GeoTIFFImage>, so a route with several points in the same
-// tile only opens it once. Never evicted — the editor's a short-lived session.
+// "surveyId/filename" -> Promise<GeoTIFFImage>, so a route with several points in the
+// same tile only opens it once. Surveys share tile filenames, hence the id in the key.
+// Never evicted — the editor's a short-lived session.
 const tileImageCache = new Map();
 
-function findLinzTile(lat, lng) {
-  return LINZ_DEM_TILES.find(t =>
-    lng >= t.bbox[0] && lng <= t.bbox[2] && lat >= t.bbox[1] && lat <= t.bbox[3]);
-}
-
-function getTileImage(tile) {
-  if (!tileImageCache.has(tile.file)) {
-    tileImageCache.set(tile.file, GeoTIFF.fromUrl(LINZ_DEM_BASE + tile.file).then(gt => gt.getImage()));
+function getTileImage(survey, tile) {
+  const key = `${survey.id}/${tile.file}`;
+  if (!tileImageCache.has(key)) {
+    tileImageCache.set(key, GeoTIFF.fromUrl(survey.base + tile.file).then(gt => gt.getImage()));
   }
-  return tileImageCache.get(tile.file);
+  return tileImageCache.get(key);
 }
 
 /**
- * Reads one pixel out of the LINZ LiDAR DEM via an HTTP range request — the whole
- * point of COG is that this doesn't download the tile. Returns null (not a
- * rejection) for anything the tile can't answer: outside survey coverage, on a
- * nodata pixel, or the fetch failing, so callers can fall through to Open-Meteo.
+ * Reads one pixel out of one survey's LiDAR DEM via an HTTP range request — the whole
+ * point of COG is that this doesn't download the tile. Returns null (not a rejection)
+ * for anything the survey can't answer: outside its coverage, on a nodata pixel, or
+ * the fetch failing.
+ *
+ * Every tile whose bbox contains the point gets tried, not just the first: those
+ * bboxes are the axis-aligned hull of a rectangle that's only square in NZTM, so along
+ * a seam the leading candidate can miss its raster while its neighbour holds the pixel.
+ * Stopping at the first candidate silently dropped those points to Open-Meteo.
+ */
+async function sampleSurveyElevation(survey, lat, lng) {
+  const candidates = survey.tiles.filter(t =>
+    lng >= t.bbox[0] && lng <= t.bbox[2] && lat >= t.bbox[1] && lat <= t.bbox[3]);
+
+  for (const tile of candidates) {
+    try {
+      const image = await getTileImage(survey, tile);
+      const [x, y] = proj4("EPSG:2193", [lng, lat]);
+      const [minX, minY, maxX, maxY] = image.getBoundingBox();
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
+
+      const w = image.getWidth(), h = image.getHeight();
+      const px = Math.min(w - 1, Math.max(0, Math.floor((x - minX) / (maxX - minX) * w)));
+      // Row 0 is the north edge (maxY) — rasters read top-down, geo Y increases north.
+      const py = Math.min(h - 1, Math.max(0, Math.floor((maxY - y) / (maxY - minY) * h)));
+
+      const raster = await image.readRasters({ window: [px, py, px + 1, py + 1] });
+      const value = raster[0][0];
+
+      const noData = image.getGDALNoData();
+      if (noData != null && value === noData) continue;
+      if (!Number.isFinite(value)) continue;
+
+      return value;
+    } catch {
+      continue; // network hiccup, malformed tile — try the next candidate, then Open-Meteo.
+    }
+  }
+  return null;
+}
+
+/**
+ * Walks the surveys newest-first and takes the first real reading. Returns
+ * {value, source} so the caller can show which survey answered, or null if none did.
  */
 async function sampleLinzElevation(lat, lng) {
-  const tile = findLinzTile(lat, lng);
-  if (!tile) return null;
-
-  try {
-    const image = await getTileImage(tile);
-    const [x, y] = proj4("EPSG:2193", [lng, lat]);
-    const [minX, minY, maxX, maxY] = image.getBoundingBox();
-    if (x < minX || x > maxX || y < minY || y > maxY) return null;
-
-    const w = image.getWidth(), h = image.getHeight();
-    const px = Math.min(w - 1, Math.max(0, Math.floor((x - minX) / (maxX - minX) * w)));
-    // Row 0 is the north edge (maxY) — rasters read top-down, geo Y increases north.
-    const py = Math.min(h - 1, Math.max(0, Math.floor((maxY - y) / (maxY - minY) * h)));
-
-    const raster = await image.readRasters({ window: [px, py, px + 1, py + 1] });
-    const value = raster[0][0];
-
-    const noData = image.getGDALNoData();
-    if (noData != null && value === noData) return null;
-
-    return value;
-  } catch {
-    return null; // network hiccup, malformed tile, etc. — Open-Meteo picks up the point.
+  for (const survey of LINZ_SURVEYS) {
+    const value = await sampleSurveyElevation(survey, lat, lng);
+    if (value != null) return { value, source: survey.id };
   }
+  return null;
 }
 
 async function fetchOpenMeteo(pts) {
@@ -648,10 +711,13 @@ async function fetchOpenMeteo(pts) {
   return data.elevation;
 }
 
+// A point's altitude came from surveyed LiDAR rather than the coarse global grid.
+const isLinz = pt => pt.altSource !== "open-meteo";
+
 /**
- * LINZ LiDAR first (1 m, ~0.2 m accuracy, Queenstown-only survey extent), Open-Meteo
- * as fallback for any point outside that coverage. Tags each point with where its
- * number came from so runElevationCheck() can show it.
+ * LINZ LiDAR first (1 m, ~0.2 m accuracy, but only inside a flown survey), Open-Meteo
+ * as fallback for any point no survey covers. Tags each point with where its number
+ * came from so runElevationCheck() can show it.
  */
 async function fetchElevations() {
   const pts = orderedPoints();
@@ -665,8 +731,8 @@ async function fetchElevations() {
   let fi = 0;
   pts.forEach((p, i) => {
     if (linz[i] != null) {
-      p.alt = Number(linz[i].toFixed(1));
-      p.altSource = "linz";
+      p.alt = Number(linz[i].value.toFixed(1));
+      p.altSource = linz[i].source;
     } else {
       p.alt = Number(fallback[fi++]);
       p.altSource = "open-meteo";
@@ -683,7 +749,7 @@ let elevRequestId = 0;
  * render()) — fetches elevations for the current route and shows what came back,
  * and whether it's trustworthy.
  *
- * The noise floor depends entirely on the source: LINZ's Queenstown LiDAR is ~0.2 m
+ * The noise floor depends entirely on the source: LINZ's LiDAR surveys are ~0.2 m
  * accurate, so even a couple of metres of relief is real signal. Open-Meteo (the
  * fallback for points outside the LiDAR survey extent) samples a ~30 m grid and
  * rounds to whole metres — over a short flat route that quantisation IS the signal;
@@ -710,7 +776,7 @@ async function runElevationCheck() {
     const alts = pts.map(p => p.alt);
     const spread = Math.max(...alts) - Math.min(...alts);
     const drop = state.start.alt - state.finish.alt;
-    const allLinz = pts.every(p => p.altSource === "linz");
+    const allLinz = pts.every(isLinz);
     const noiseFloor = allLinz ? 1 : 15;
 
     let verdict;
