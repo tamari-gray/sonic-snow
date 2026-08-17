@@ -56,6 +56,16 @@ public class FinishLinePillar : MonoBehaviour
         spawnedPillar.transform.localPosition = enu;
         spawnedPillar.transform.localRotation = GpsUtils.ReadableFromOrigin(enu);
 
+        // PillarRetroChecker's base/top fade band is tuned in local terms but reads
+        // world-space Y — on a route where the finish altitude differs meaningfully from the
+        // origin's, the whole prefab spawns far from world Y=0 and the fade band discards the
+        // pillar everywhere (confirmed 2026-08-17: 18m altitude drop made it fully invisible
+        // while siblings using other materials were unaffected). Tell the shader where its own
+        // base actually landed so the fade re-anchors to that instead of assuming world Y=0.
+        Transform lightPillar = spawnedPillar.transform.Find("LightPillar");
+        if (lightPillar != null && lightPillar.TryGetComponent(out Renderer pillarRenderer))
+            pillarRenderer.material.SetFloat("_BaseWorldY", spawnedPillar.transform.position.y);
+
         GroundContactShadow.Create(spawnedPillar.transform, contactShadowRadius);
 
         Debug.Log($"[FinishLinePillar] Beam placed at ENU {enu} " +

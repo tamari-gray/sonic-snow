@@ -45,6 +45,14 @@ Shader "SonicSnow/PillarRetroChecker"
         _TopFadeStart   ("Top fade start (m)", Float) = 13.0
         _TopFadeRange   ("Top fade range (m)", Float) = 6.0
 
+        // World-space Y the pillar's own base actually spawned at. The fade band above is
+        // tuned in local terms (base at 0, top at 18), but this shader reads world-space Y —
+        // so on a route where the finish sits at a meaningfully different altitude than the
+        // origin, the whole prefab spawns far from world Y=0 and the fade band (and thus the
+        // whole pillar) silently discards everywhere. Set once from FinishLinePillar.SpawnPillar
+        // right after placement; defaults to 0 so an unset material behaves exactly as before.
+        _BaseWorldY ("Base world Y (m)", Float) = 0
+
         // Screen-space checker cell size in pixels. The reference's own canvas rendered at
         // a small, downscaled resolution, so its "~1px" reads as a chunky, clearly visible
         // square there — at full device resolution that would be nearly invisible, so this
@@ -103,6 +111,7 @@ Shader "SonicSnow/PillarRetroChecker"
                 float  _TopFadeStart;
                 float  _TopFadeRange;
                 float  _CellPx;
+                float  _BaseWorldY;
             CBUFFER_END
 
             Varyings Vertex(Attributes input)
@@ -129,8 +138,9 @@ Shader "SonicSnow/PillarRetroChecker"
                 // from every viewing angle, never brighter at the silhouette edge.
                 float3 col = _CoreColor.rgb * _Intensity;
 
-                float baseFade = saturate((input.positionWS.y + _BaseFadeOffset) / max(_BaseFadeRange, 1e-4));
-                float topFade  = 1.0 - saturate((input.positionWS.y - _TopFadeStart) / max(_TopFadeRange, 1e-4));
+                float localY = input.positionWS.y - _BaseWorldY;
+                float baseFade = saturate((localY + _BaseFadeOffset) / max(_BaseFadeRange, 1e-4));
+                float topFade  = 1.0 - saturate((localY - _TopFadeStart) / max(_TopFadeRange, 1e-4));
                 float fade = baseFade * topFade;
                 float a = _Body * fade;
 
