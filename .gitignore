@@ -104,3 +104,8 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Captured logs from Tools/capture-logcat.ps1 — large, single-use, and sent to XREAL
+# rather than kept in history.
+logcat.txt
+logcat-stripped.txt
