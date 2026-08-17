@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections;
 using System.Text;
+using Unity.XR.XREAL.Samples;
 
 public class GameLogic : MonoBehaviour
 {
@@ -38,23 +39,41 @@ public class GameLogic : MonoBehaviour
     private string playerUsername = DefaultUsername;
 
     [Header("Proximity")]
-    [Tooltip("How close to the origin counts as being at the start gate, in metres.")]
-    [SerializeField] private float startProximityRadius = 10f;
-
     [Tooltip("How close to the finish coord ends the race, in metres.")]
     [SerializeField] private float finishProximityRadius = 10f;
 
-    [Tooltip("Don't trigger the start on a fix worse than this, in metres. Must stay comfortably " +
-             "below the distance from start to finish, or a sloppy fix can read as 'at the gate' " +
-             "from down the route. 20m suits street testing, where accuracy rarely beats 10m; " +
-             "tighten it on an open slope.")]
-    [SerializeField] private float maxTriggerAccuracy = 20f;
+    [Tooltip("Don't trigger the finish on a fix worse than this, in metres. Previously unset — " +
+             "the finish had no accuracy gate at all, so a rough fix could end the race before " +
+             "the rider physically reached the beam.")]
+    [SerializeField] private float maxFinishTriggerAccuracy = 20f;
 
     [Tooltip("Seconds between proximity log lines. The on-screen log only keeps a handful of rows, " +
              "so logging this every frame buries the GeoAnchor and spawn messages you actually need.")]
     [SerializeField] private float proximityLogInterval = 1f;
 
+    [Header("Debug / Scope")]
+    [Tooltip("Skips the username entry screen: start line goes straight into the countdown " +
+             "using the default \"Player\" name, and the finish line goes straight back to " +
+             "searching for start with no Firebase submission (so repeated test runs don't " +
+             "spam the leaderboard with placeholder entries). For focusing on core race " +
+             "mechanics (checkpoints, finish) without that screen in the way.")]
+    [SerializeField] private bool skipUsernameEntry = true;
+
+    [Tooltip("Master switch for the race itself. Off leaves the app sitting on a blank screen once " +
+             "calibration clears — nothing spawns and the countdown/checkpoints/finish never run. " +
+             "The distance-to-start check that used to gate this lives on CalibrationScreen now (it " +
+             "IS one of the five calibration conditions), so this fires once, right when calibration " +
+             "completes, rather than every frame in a search loop. On by default now that the start " +
+             "gate is folded into calibration — turn off only to park on calibration for debugging.")]
+    [SerializeField] private bool raceMechanicsEnabled = true;
+
     private float lastProximityLogTime = float.NegativeInfinity;
+
+    /// <summary>Set once startup has finished. See the gate in <see cref="Update"/>.</summary>
+    private bool armed;
+
+    /// <summary>True once startup is complete and the proximity checks are live.</summary>
+    public bool IsArmed => armed;
 
     private const string LEADERBOARD_URL = "https://sonicar-7ea55-default-rtdb.asia-southeast1.firebasedatabase.app/leaderboard.json";
 
@@ -62,6 +81,10 @@ public class GameLogic : MonoBehaviour
     {
         Instance = this;
         Debug.Log("✔ GameLogic Awake ACTIVE");
+
+        if (!raceMechanicsEnabled)
+            Debug.LogWarning("[GameLogic] Race mechanics disabled — calibration will still run its " +
+                             "distance-to-start check, but nothing will spawn once it clears.");
     }
 
     IEnumerator Start()
@@ -90,23 +113,34 @@ public class GameLogic : MonoBehaviour
             yield return new WaitUntil(() => CalibrationScreen.Instance.IsReady);
         }
 
-        BeginSearchingForStart();
+        armed = true;
+
+        // The race clock's on-screen text sits on the head-locked HUD, not inside the
+        // calibration panel, so it stays hidden until now rather than showing "0.000"
+        // through the whole calibration hold.
+        if (RaceTimer.instance != null) RaceTimer.instance.Show();
+
+        // Calibration's "Distance to start" condition IS the start-gate trigger now — by
+        // construction it can't clear without the player already standing at the gate
+        // with a fix at least as good as the old per-frame check required. No separate
+        // search loop needed afterwards.
+        TriggerRaceStart();
     }
 
     void Update()
     {
         PollLocation();
 
-        switch (CurrentState)
-        {
-            case GameState.SearchingForStart:
-                CheckStartLineProximity();
-                break;
+        // Nothing runs until Start() has cleared the route load *and* the calibration
+        // screen. Update doesn't wait on that coroutine, so without this gate the
+        // default SearchingForStart state would be live from frame one — see the armed
+        // flag's history for why that matters.
+        if (!armed) return;
 
-            case GameState.Racing:
-                CheckCheckpointProximity();
-                CheckFinishLineProximity();
-                break;
+        if (CurrentState == GameState.Racing)
+        {
+            CheckCheckpointProximity();
+            CheckFinishLineProximity();
         }
     }
 
@@ -127,35 +161,18 @@ public class GameLogic : MonoBehaviour
         return true;
     }
 
-    private void CheckStartLineProximity()
+    /// <summary>
+    /// Fires once, right after calibration confirms the player is at the start line with a
+    /// good fix — see CalibrationScreen's "Distance to start" condition, which now owns
+    /// that check. Replaces the old per-frame CheckStartLineProximity() trigger: since
+    /// calibration only runs once per app launch and the current workflow is a fresh
+    /// launch per run, there's no need for a live re-check loop afterwards.
+    /// </summary>
+    private void TriggerRaceStart()
     {
-        if (LocationHandler.Instance == null || !LocationHandler.Instance.IsReady) return;
-
-        if (MapDataFetcher.Instance == null || !MapDataFetcher.Instance.IsLoaded)
+        if (!raceMechanicsEnabled)
         {
-            if (ShouldLogProximity()) Debug.Log("Route config not loaded yet — can't check the start line");
-            return;
-        }
-
-        MapData config = MapDataFetcher.Instance.LoadedConfig;
-
-        float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.originLat, config.originLng);
-
-        // Everything you need to diagnose a failed start, on one line in the on-screen log.
-        if (ShouldLogProximity())
-        {
-            Debug.Log($"Start line {distance:F1}m away (need <{startProximityRadius:F0}m) | " +
-                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m (need <{maxTriggerAccuracy:F0}m) | " +
-                      $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
-        }
-
-        if (distance > startProximityRadius) return;
-
-        if (LocationHandler.Instance.HorizontalAccuracy > maxTriggerAccuracy)
-        {
-            if (ShouldLogProximity())
-                Debug.Log($"At the start line but the fix is only good to " +
-                          $"{LocationHandler.Instance.HorizontalAccuracy:F1}m — waiting for a better one");
+            Debug.LogWarning("[GameLogic] Race mechanics disabled — calibration cleared but nothing will spawn.");
             return;
         }
 
@@ -165,14 +182,14 @@ public class GameLogic : MonoBehaviour
             return;
         }
 
-        // Spawning before any alignment exists drops the beam at a meaningless spot,
-        // which reads as the whole system being broken. Hold the start instead. With
-        // the launch seed this should only ever trip while the route config is still
-        // downloading, since the seed needs no GPS fix and no movement.
+        // Shouldn't happen: the launch seed aligns as soon as the route config loads and
+        // the first camera frame exists, both of which finish well before calibration's
+        // AR-tracking/steadiness/GPS conditions do. Logged rather than retried, since
+        // there's no more per-frame loop to retry from — this call only ever fires once.
         if (!GeoAnchor.Instance.IsAligned)
         {
-            Debug.Log("At the start line but the world isn't aligned yet — waiting on the route config");
-            return;
+            Debug.LogError("[GameLogic] Calibration finished but GeoAnchor isn't aligned yet — " +
+                           "starting anyway, but placement will be wrong.");
         }
 
         // The player is standing at the gate, so their real altitude is the route's
@@ -215,19 +232,32 @@ public class GameLogic : MonoBehaviour
                 ? $"CP {domes.CollectedCount}/{domes.Total} | " : "";
 
             Debug.Log($"Finish line {distance:F1}m away (need <{finishProximityRadius:F0}m) | " +
-                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m | {checkpoints}" +
-                      $"anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
+                      $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m (need <{maxFinishTriggerAccuracy:F0}m) | " +
+                      $"{checkpoints}anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
         }
 
-        if (distance <= finishProximityRadius)
+        if (distance > finishProximityRadius) return;
+
+        if (LocationHandler.Instance.HorizontalAccuracy > maxFinishTriggerAccuracy)
         {
-            OnFinishLineReached();
+            if (ShouldLogProximity())
+                Debug.Log($"At the finish line but the fix is only good to " +
+                          $"{LocationHandler.Instance.HorizontalAccuracy:F1}m — waiting for a better one");
+            return;
         }
+
+        OnFinishLineReached();
     }
 
+    /// <summary>
+    /// Resets state after a race finishes. There's no live re-trigger afterwards — the
+    /// start-gate check now lives on CalibrationScreen and only ever runs once per app
+    /// launch — so this just leaves a clean slate for the next launch rather than
+    /// searching for anything itself.
+    /// </summary>
     void BeginSearchingForStart()
     {
-        Debug.Log("Searching for start line...");
+        Debug.Log("Race finished and reset. Relaunch the app to run again.");
         CurrentState = GameState.SearchingForStart;
 
         // Tear down the previous run's world before resetting the alignment, so
@@ -239,19 +269,16 @@ public class GameLogic : MonoBehaviour
         // player may well have ridden the lift back up, so the old fit is stale.
         if (GeoAnchor.Instance != null)
             GeoAnchor.Instance.ResetAlignment();
-
-        if (RetroLeaderboardUI.Instance != null)
-            RetroLeaderboardUI.Instance.Show();
-        else
-            Debug.LogWarning("RetroLeaderboardUI instance is null — run Sonic Snow > Set Up Leaderboard.");
     }
 
 
     // player inputs username and presses button to start race
     void InitPlayerAndWorld()
     {
-        if (RetroLeaderboardUI.Instance != null)
-            RetroLeaderboardUI.Instance.Hide();
+        // Defensive: nothing currently re-enters this mid-launch (the start gate only ever
+        // fires once, right after calibration), but if that ever changes, a leftover score
+        // screen from the previous run shouldn't still be up for the next one.
+        if (FinishScoreUI.Instance != null) FinishScoreUI.Instance.Hide();
 
         if (RaceTimer.instance != null)
         {
@@ -268,7 +295,15 @@ public class GameLogic : MonoBehaviour
         else
             Debug.LogWarning("FinishLinePillar instance is null!");
 
-        ShowUsernamePanel();
+        if (skipUsernameEntry)
+        {
+            playerUsername = DefaultUsername;
+            EnterRacingState();
+        }
+        else
+        {
+            ShowUsernamePanel();
+        }
     }
 
     /// <summary>
@@ -362,6 +397,32 @@ public class GameLogic : MonoBehaviour
         {
             RaceTimer.instance.StopTimer();
             elapsedSeconds = RaceTimer.instance.ElapsedTime;
+        }
+
+        int checkpointsCollected = CheckpointDomeSpawner.Instance != null ? CheckpointDomeSpawner.Instance.CollectedCount : 0;
+        int checkpointsTotal = CheckpointDomeSpawner.Instance != null ? CheckpointDomeSpawner.Instance.Total : 0;
+
+        if (FinishLinePillar.Instance != null && GeoAnchor.Instance != null)
+            FinishCollectEffect.Play(GeoAnchor.Instance.Root, FinishLinePillar.Instance.LocalPosition);
+
+        // Finalizes the capture file and hands it to the device's gallery — see
+        // FirstPersonStreammingCast.StopIfRecording's doc comment for why this, not the
+        // recording-just-started flag, is what actually needs to run for anything to be
+        // retrievable afterward.
+        if (FirstPersonStreammingCast.Instance != null)
+            FirstPersonStreammingCast.Instance.StopIfRecording();
+
+        if (FinishScoreUI.Instance != null)
+            FinishScoreUI.Instance.Show(playerUsername, elapsedSeconds, checkpointsCollected, checkpointsTotal);
+        else
+            Debug.LogWarning("FinishScoreUI instance is null — run Sonic Snow > Set Up Finish Score.");
+
+        if (skipUsernameEntry)
+        {
+            // No real username was ever collected in this mode, so submitting would only
+            // ever write a placeholder "Player" row — skip straight back to searching.
+            ReturnToSearching();
+            return;
         }
 
         // Submit *then* return, in that order. Firing both at once races the PATCH

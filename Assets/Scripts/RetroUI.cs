@@ -94,6 +94,9 @@ public static class RetroUI
         layout.childAlignment = TextAnchor.MiddleLeft;
         layout.childForceExpandWidth = false;
         layout.childForceExpandHeight = false;
+        // See BorderedPanel's note: expand settings do nothing without childControl also on.
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
 
         return go;
     }
@@ -248,25 +251,46 @@ public static class RetroUI
         }
     }
 
-    /// <summary>
-    /// The cyan-bordered panel: a border-coloured block with the panel colour inset,
-    /// sized by its own content.
-    /// </summary>
+    /// <summary>The cyan-bordered panel — see the full overload below. Kept for existing callers.</summary>
     public static GameObject BorderedPanel(RectTransform parent, RectOffset padding, float spacing)
+        => BorderedPanel(parent, padding, spacing, AccentCyan, Panel);
+
+    /// <summary>Border colour only — see the full overload below. Fill stays RetroUI's own Panel tone.</summary>
+    public static GameObject BorderedPanel(RectTransform parent, RectOffset padding, float spacing,
+                                           Color borderColour)
+        => BorderedPanel(parent, padding, spacing, borderColour, Panel);
+
+    /// <summary>
+    /// A border-coloured block with the fill colour inset, sized by its own content. Both
+    /// colours are parameters rather than always AccentCyan/Panel so a screen with its own
+    /// palette (see FinishScoreUI) isn't forced into the arcade-cabinet cyan/gold scheme.
+    /// </summary>
+    public static GameObject BorderedPanel(RectTransform parent, RectOffset padding, float spacing,
+                                           Color borderColour, Color fillColour)
     {
-        GameObject outer = Block("Panel", parent, AccentCyan);
+        GameObject outer = Block("Panel", parent, borderColour);
         VerticalLayoutGroup outerLayout = outer.AddComponent<VerticalLayoutGroup>();
         outerLayout.padding = new RectOffset(5, 5, 5, 5);
         outerLayout.childForceExpandWidth = true;
         outerLayout.childForceExpandHeight = false;
+        // childForceExpandWidth alone does nothing — Unity's LayoutGroup only applies expand
+        // (or any other per-child sizing) when childControlWidth/Height is also true. Left
+        // unset, every child of this panel — and anything built on top of it, like
+        // FinishScoreUI — silently stayed at RectTransform's raw 100x100 default regardless
+        // of any LayoutElement.preferredWidth set on it. Confirmed 2026-08-17 as the actual
+        // cause of the finish score screen reading "thin and jumbled".
+        outerLayout.childControlWidth = true;
+        outerLayout.childControlHeight = true;
         outer.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        GameObject inner = Block("PanelInner", (RectTransform)outer.transform, Panel);
+        GameObject inner = Block("PanelInner", (RectTransform)outer.transform, fillColour);
         VerticalLayoutGroup innerLayout = inner.AddComponent<VerticalLayoutGroup>();
         innerLayout.padding = padding;
         innerLayout.spacing = spacing;
         innerLayout.childForceExpandWidth = true;
         innerLayout.childForceExpandHeight = false;
+        innerLayout.childControlWidth = true;
+        innerLayout.childControlHeight = true;
         inner.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         return inner;

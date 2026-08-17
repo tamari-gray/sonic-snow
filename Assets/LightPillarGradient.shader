@@ -20,6 +20,18 @@ Shader "SonicSnow/LightPillarGradient"
         // Where the FINISH LINE text sits, as a fraction of the beam's height.
         // The beam spans 0.17m to 50.17m and the text sits at 15.83m, so (15.83-0.17)/50.
         _MarkerHeight ("Marker height up beam", Range(0.001, 0.999)) = 0.313134
+
+        // Soft dissolve at the very bottom, as a fraction of the beam's height. Without
+        // this the beam is fully opaque right where it meets the snow, so the hard
+        // intersection reads as clipping through the ground — especially on optical
+        // see-through glasses, which can't occlude the real world behind it. 0.06 of a
+        // 50m beam is roughly a 3m mist zone.
+        _GroundFade ("Ground fade height", Range(0, 0.5)) = 0.06
+
+        // Shapes the fade curve. 1 is linear; higher values hold the beam transparent
+        // for longer near the ground and ramp up faster, which reads more like haze
+        // than like a dimmer switch.
+        _GroundFadeSoftness ("Ground fade softness", Range(0.25, 4)) = 1.6
     }
 
     SubShader
@@ -59,6 +71,7 @@ Shader "SonicSnow/LightPillarGradient"
                 float4 positionCS : SV_POSITION;
                 float  heightT    : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             // Must match the Properties block exactly, or the SRP Batcher silently
@@ -69,6 +82,8 @@ Shader "SonicSnow/LightPillarGradient"
                 float  _AlphaMarker;
                 float  _AlphaTop;
                 float  _MarkerHeight;
+                float  _GroundFade;
+                float  _GroundFadeSoftness;
             CBUFFER_END
 
             Varyings Vertex(Attributes input)
@@ -77,6 +92,7 @@ Shader "SonicSnow/LightPillarGradient"
 
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
 
@@ -90,6 +106,7 @@ Shader "SonicSnow/LightPillarGradient"
             half4 Fragment(Varyings input) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
                 // Clamped away from the ends so neither segment can divide by zero.
                 float marker = clamp(_MarkerHeight, 0.001, 0.999);
@@ -99,6 +116,12 @@ Shader "SonicSnow/LightPillarGradient"
                 float alpha = (t < marker)
                     ? lerp(_AlphaBase,   _AlphaMarker, t / marker)
                     : lerp(_AlphaMarker, _AlphaTop,    (t - marker) / (1.0 - marker));
+
+                // Dissolve the base into the ground. Applied on top of the ramp rather
+                // than folded into it, so tuning the mist can't disturb the marker/top
+                // gradient the beam's read depends on.
+                float groundFade = saturate(t / max(_GroundFade, 1e-4));
+                alpha *= pow(groundFade, _GroundFadeSoftness);
 
                 return half4(_BaseColor.rgb, _BaseColor.a * alpha);
             }

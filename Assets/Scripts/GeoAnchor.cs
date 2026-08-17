@@ -77,8 +77,14 @@ public class GeoAnchor : MonoBehaviour
     [Tooltip("How fast Root eases toward a new solution. 0 snaps instantly, which reads as the world jumping.")]
     [SerializeField] private float smoothing = 2f;
 
-    [Tooltip("Assumed height of the device above the snow when the vertical anchor is set, in metres.")]
-    [SerializeField] private float deviceHoldHeight = 1.4f;
+    [Tooltip("Assumed height of the device above the snow when the vertical anchor is set, in metres. " +
+             "Getting this wrong offsets the whole geo ground plane by the difference, so tune it if " +
+             "placement sits consistently high or low. 2.1 is a 2026-08-16 field-test correction on " +
+             "Beam Pro + One Pro: checkpoints and the finish beam both sat ~0.5m above the snow at the " +
+             "old 1.6 (which was tuned for eye height alone) — whatever this rig actually reports for " +
+             "camera height, it reads higher than a plain eye-level assumption by about that much. If a " +
+             "future test still floats or now sits low, adjust this by the newly measured error.")]
+    [SerializeField] private float deviceHoldHeight = 2.1f;
 
     [Header("Debug")]
     [SerializeField] private bool logCalibration = true;

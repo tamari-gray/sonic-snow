@@ -61,6 +61,7 @@ Shader "SonicSnow/DomeGlow"
                 float3 normalWS   : TEXCOORD0;
                 float3 positionWS : TEXCOORD1;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             // Must match the Properties block exactly or the SRP Batcher drops this material.
@@ -77,6 +78,7 @@ Shader "SonicSnow/DomeGlow"
 
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 
                 VertexPositionInputs positions = GetVertexPositionInputs(input.positionOS.xyz);
                 VertexNormalInputs   normals   = GetVertexNormalInputs(input.normalOS);
@@ -91,6 +93,7 @@ Shader "SonicSnow/DomeGlow"
             half4 Fragment(Varyings input) : SV_Target
             {
                 UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
                 float3 normal = normalize(input.normalWS);
                 float3 view   = normalize(GetWorldSpaceViewDir(input.positionWS));

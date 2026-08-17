@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// The race-start countdown, built to the design artifact: three starting lights that
+/// The race-start countdown, built to the design artifact: five starting lights that
 /// fill one at a time, and a big number that pops in and changes colour each beat.
 ///
 /// Background stays transparent — this overlays the live AR view, so a backdrop would
@@ -21,7 +21,7 @@ public class CountdownTimer : MonoBehaviour
     [Tooltip("Chunky face for GO!. The design calls for Press Start 2P.")]
     [SerializeField] private TMP_FontAsset displayFont;
 
-    [Tooltip("Numerals for 3-2-1. The design calls for VT323.")]
+    [Tooltip("Numerals for the countdown digits (5-4-3-2-1). The design calls for VT323.")]
     [SerializeField] private TMP_FontAsset numeralFont;
 
     [Header("Timing")]
@@ -36,7 +36,7 @@ public class CountdownTimer : MonoBehaviour
     private static readonly Color LightBoxFill   = RetroUI.Panel;
     private static readonly Color UnlitRing      = RetroUI.RibbonBorder;
 
-    private const int Lights = 3;
+    private const int Lights = 5;
     private const float LightBox = 74f;
     private const float LightDot = 44f;
 
@@ -64,6 +64,9 @@ public class CountdownTimer : MonoBehaviour
         Build();
         root.gameObject.SetActive(false);
     }
+
+    /// <summary>True while the countdown is on screen. Read by the automated flow test.</summary>
+    public bool IsRunning => root != null && root.gameObject.activeSelf;
 
     public void StartCountdown(System.Action onComplete)
     {
@@ -93,7 +96,7 @@ public class CountdownTimer : MonoBehaviour
     {
         root.gameObject.SetActive(true);
 
-        // step 0-2 count down from three; step 3 is GO.
+        // step 0-4 count down from five; step 5 is GO.
         for (int step = 0; step <= Lights; step++)
         {
             bool go = step >= Lights;
@@ -107,6 +110,11 @@ public class CountdownTimer : MonoBehaviour
             SetLights(step, go);
             yield return StartCoroutine(PopNumber(label, colour, go));
 
+            // PopNumber now itself accounts for the full popDuration (tween + hold), so
+            // this is exactly the beat's remaining time. Previously PopNumber returned
+            // right after its tween — at 35% of popDuration — while this still subtracted
+            // the full popDuration, so every beat ran popDuration*0.65 short. At the
+            // defaults that made stepDuration=1f actually land beats ~0.73s apart, not 1s.
             float remaining = stepDuration - popDuration;
             if (remaining > 0f) yield return new WaitForSeconds(remaining);
         }
@@ -115,7 +123,7 @@ public class CountdownTimer : MonoBehaviour
         onComplete?.Invoke();
     }
 
-    /// <summary>Fills one more light per beat; all three go green on GO.</summary>
+    /// <summary>Fills one more light per beat; all five go green on GO.</summary>
     private void SetLights(int step, bool go)
     {
         Color lit = go ? RetroUI.Go : RetroUI.RibbonRed;
@@ -137,7 +145,9 @@ public class CountdownTimer : MonoBehaviour
 
     /// <summary>
     /// The artifact's pop keyframe: scale 2.1 down to 1 with the opacity coming up,
-    /// landing at 35% of the duration and holding.
+    /// landing at 35% of the duration and holding for the rest of it. The hold matters as
+    /// much as the tween: RunCountdown's own wait afterward assumes this coroutine occupies
+    /// the *entire* popDuration before returning, not just the animated portion.
     /// </summary>
     private IEnumerator PopNumber(string label, Color colour, bool go)
     {
@@ -161,6 +171,9 @@ public class CountdownTimer : MonoBehaviour
 
         numberSlot.localScale = Vector3.one;
         SetNumberAlpha(1f);
+
+        float hold = popDuration - landing;
+        if (hold > 0f) yield return new WaitForSeconds(hold);
     }
 
     private void SetNumberAlpha(float alpha)

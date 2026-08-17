@@ -1,12 +1,19 @@
 // Source - https://stackoverflow.com/a/67704821
 // Posted by xjcl, modified by community. See post 'Timeline' for change history
 // Retrieved 2026-06-28, License - CC BY-SA 4.0
+//
+// Ported off OnGUI for the XREAL build: IMGUI doesn't render through the XR pipeline, so
+// the log now writes into a TMP text on a world-space canvas instead. See XREALCanvasConversion
+// for how the game's other canvases moved to world space.
 
 using UnityEngine;
 using System.Collections;
+using TMPro;
 
 public class ZzzLog : MonoBehaviour
 {
+    [SerializeField] private TMP_Text display;
+
     uint qsize = 15;  // number of messages to keep
     Queue myLogQueue = new Queue();
 
@@ -27,6 +34,12 @@ public class ZzzLog : MonoBehaviour
 
     void HandleLog(string logString, string stackTrace, LogType type)
     {
+        // TMP logs a warning whenever a string it's asked to render contains a glyph
+        // missing from the font. Displaying that warning re-triggers the same warning
+        // about its own text object forever, pegging a frame every update — drop it.
+        if (type == LogType.Warning && logString.Contains("was not found in the") && logString.Contains("font asset"))
+            return;
+
         myLogQueue.Enqueue("[" + type + "] : " + logString);
         if (type == LogType.Exception)
             myLogQueue.Enqueue(stackTrace);
@@ -34,6 +47,8 @@ public class ZzzLog : MonoBehaviour
             myLogQueue.Dequeue();
 
         WriteCrashLog(logString, stackTrace, type);
+
+        if (display != null) display.text = string.Join("\n", myLogQueue.ToArray());
     }
 
     // On-device crash log — the on-screen queue only holds the last few lines,
@@ -46,12 +61,5 @@ public class ZzzLog : MonoBehaviour
         System.IO.File.AppendAllText(path,
             $"\n[{System.DateTime.Now}] {logString}\n{stackTrace}\n"
         );
-    }
-
-    void OnGUI()
-    {
-        GUILayout.BeginArea(new Rect(Screen.width - 400, 0, 400, Screen.height));
-        GUILayout.Label("\n" + string.Join("\n", myLogQueue.ToArray()));
-        GUILayout.EndArea();
     }
 }

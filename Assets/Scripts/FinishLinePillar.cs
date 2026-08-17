@@ -15,7 +15,17 @@ public class FinishLinePillar : MonoBehaviour
     [Tooltip("Vertical nudge in metres, for tuning where the beam meets the snow.")]
     [SerializeField] private float verticalOffset = 0f;
 
+    [Tooltip("Radius of the ground contact shadow under the beam, in metres. See " +
+             "GroundContactShadow — a grounding cue standing in for real occlusion, which " +
+             "XREAL's glasses can't do.")]
+    [SerializeField] private float contactShadowRadius = 0.8f;
+
     private GameObject spawnedPillar;
+
+    /// <summary>The spawned beam's position in GeoAnchor.Root's local space, for anything
+    /// that needs to place itself alongside it (see FinishCollectEffect). Zero if no beam
+    /// is currently spawned.</summary>
+    public Vector3 LocalPosition => spawnedPillar != null ? spawnedPillar.transform.localPosition : Vector3.zero;
 
     private void Awake()
     {
@@ -45,6 +55,8 @@ public class FinishLinePillar : MonoBehaviour
         spawnedPillar = Instantiate(pillarPrefab, GeoAnchor.Instance.Root);
         spawnedPillar.transform.localPosition = enu;
         spawnedPillar.transform.localRotation = GpsUtils.ReadableFromOrigin(enu);
+
+        GroundContactShadow.Create(spawnedPillar.transform, contactShadowRadius);
 
         Debug.Log($"[FinishLinePillar] Beam placed at ENU {enu} " +
                   $"({enu.magnitude:F0}m from start, {(config.HasSurveyedAltitudes ? "surveyed altitude" : "no altitude data")})");
