@@ -18,6 +18,15 @@ public class CheckpointDomeSpawner : MonoBehaviour
     [Tooltip("Vertical nudge in metres, for tuning where the domes sit relative to the snow.")]
     [SerializeField] private float verticalOffset = 0f;
 
+    [Tooltip("Radius of the ground contact shadow under each dome, in metres. See " +
+             "GroundContactShadow — a grounding cue standing in for real occlusion, which " +
+             "XREAL's glasses can't do. Without it, a correctly-placed dome on sloped terrain " +
+             "can look like it's floating from a distance (weak depth cues at range), even " +
+             "though it settles into place visually once the rider is close enough for " +
+             "parallax/relative-size cues to take over. Matches FinishLinePillar's use of the " +
+             "same helper; sized a bit larger here since the dome's own footprint is bigger.")]
+    [SerializeField] private float contactShadowRadius = 2.5f;
+
     [Header("Collection")]
     [Tooltip("How close the rider has to get for a checkpoint to count, in metres.")]
     [SerializeField] private float collectRadius = 10f;
@@ -92,6 +101,8 @@ public class CheckpointDomeSpawner : MonoBehaviour
             dome.transform.localPosition = enu;
             dome.transform.localRotation = GpsUtils.ReadableFromOrigin(enu);
             dome.name = "CheckpointDome_" + i;
+
+            GroundContactShadow.Create(dome.transform, contactShadowRadius);
 
             checkpoints.Add(new Checkpoint
             {
