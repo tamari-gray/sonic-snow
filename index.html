@@ -162,9 +162,6 @@
   .hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
   .hint b { color: var(--text); font-weight: 650; }
 
-  label.chk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
-  label.chk input { accent-color: var(--accent); width: 15px; height: 15px; }
-
   #toast {
     position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(120%);
     background: var(--panel); border: 1px solid var(--line); color: var(--text);
@@ -223,21 +220,15 @@
 
       <div class="sec">
         <h2>Altitude</h2>
-        <label class="chk">
-          <input type="checkbox" id="useAlt">
-          Fetch ground elevation for each point
-        </label>
-        <div class="row" style="margin-top:9px">
-          <button id="btnElev" class="grow">Check elevations</button>
-        </div>
         <div id="elevOut"></div>
         <p class="hint" style="margin:8px 0 0">
-          Uses LINZ's surveyed Queenstown LiDAR (1&nbsp;m grid, ~0.2&nbsp;m accuracy) where
-          a point falls inside the survey area, and falls back to a coarser global
-          terrain grid (~30&nbsp;m, quantised to whole metres) outside it &mdash; the
-          per&#8209;point source is shown after checking. Unchecked sends zeros and the
-          game places everything flat at start&#8209;gate height &mdash; which is correct
-          for a flat route.
+          Refetched automatically after every point placed, dragged, or deleted. Uses LINZ's
+          surveyed Queenstown LiDAR (1&nbsp;m grid, ~0.2&nbsp;m accuracy) where a point falls
+          inside the survey area, and falls back to a coarser global terrain grid
+          (~30&nbsp;m, quantised to whole metres) outside it &mdash; the per&#8209;point
+          source is shown below. On routes with too little relief to trust, altitudes are
+          sent as zero and the game places everything flat at start&#8209;gate height, which
+          is correct for a flat route.
         </p>
       </div>
 
@@ -318,6 +309,7 @@ const state = {
   start: null,         // {lat, lng, alt}
   finish: null,
   checkpoints: [],
+  useAlt: false,        // auto-decided by runElevationCheck() from relief/source, not user-set
 };
 
 let map, routeLine;
@@ -389,6 +381,7 @@ function render() {
   drawStats();
   drawCheckpointList();
   drawJson();
+  runElevationCheck();
 }
 
 function drawMarkers() {
@@ -587,7 +580,7 @@ function drawJson() {
     return;
   }
 
-  el.textContent = JSON.stringify(buildPayload(document.getElementById("useAlt").checked), null, 2);
+  el.textContent = JSON.stringify(buildPayload(state.useAlt), null, 2);
 }
 
 /* ---------------------------------------------------------------- elevation */
@@ -658,7 +651,7 @@ async function fetchOpenMeteo(pts) {
 /**
  * LINZ LiDAR first (1 m, ~0.2 m accuracy, Queenstown-only survey extent), Open-Meteo
  * as fallback for any point outside that coverage. Tags each point with where its
- * number came from so checkElevations() can show it.
+ * number came from so runElevationCheck() can show it.
  */
 async function fetchElevations() {
   const pts = orderedPoints();
@@ -681,8 +674,14 @@ async function fetchElevations() {
   });
 }
 
+// Bumped on every call so a slow fetch superseded by a newer point edit doesn't
+// clobber the box with stale data after the fresher one already landed.
+let elevRequestId = 0;
+
 /**
- * Shows what the elevation lookup actually returned, and whether it's trustworthy.
+ * Runs after every point placed, dragged, reordered, or deleted (called from
+ * render()) — fetches elevations for the current route and shows what came back,
+ * and whether it's trustworthy.
  *
  * The noise floor depends entirely on the source: LINZ's Queenstown LiDAR is ~0.2 m
  * accurate, so even a couple of metres of relief is real signal. Open-Meteo (the
@@ -690,22 +689,22 @@ async function fetchElevations() {
  * rounds to whole metres — over a short flat route that quantisation IS the signal;
  * an 88 m street once came back with a 4 m "drop" that didn't exist. So: full trust
  * if every point resolved via LINZ, the old conservative check if any point had to
- * fall back.
+ * fall back. The verdict decides state.useAlt directly — there's no manual override.
  */
-async function checkElevations() {
+async function runElevationCheck() {
   const box = document.getElementById("elevOut");
-  const btn = document.getElementById("btnElev");
 
   if (!state.start || !state.finish) {
-    box.innerHTML = `<div class="msg warn">Place a start and a finish first.</div>`;
+    box.innerHTML = "";
     return;
   }
 
-  btn.disabled = true;
+  const myId = ++elevRequestId;
   box.innerHTML = `<div class="msg">Fetching…</div>`;
 
   try {
     await fetchElevations();
+    if (myId !== elevRequestId) return; // a later edit already started a fresher fetch
 
     const pts = orderedPoints();
     const alts = pts.map(p => p.alt);
@@ -716,20 +715,20 @@ async function checkElevations() {
 
     let verdict;
     if (spread < noiseFloor) {
+      state.useAlt = false;
       verdict = `<div class="msg warn">
         Only ${spread.toFixed(1)} m of relief across the whole route${allLinz ? "" :
         ", and at least one point fell back to the coarser Open-Meteo grid"}. That's
-        within the noise floor, so these numbers are mostly noise. Leave altitudes
-        <b>off</b> — flat placement will be more accurate.
+        within the noise floor, so these numbers are mostly noise. Sending altitudes
+        as <b>zero</b> — flat placement will be more accurate.
       </div>`;
-      document.getElementById("useAlt").checked = false;
     } else {
+      state.useAlt = true;
       verdict = `<div class="msg ok">
         ${Math.abs(drop).toFixed(1)} m of ${drop > 0 ? "descent" : "climb"} start to finish
         (${allLinz ? "all from LINZ LiDAR survey data" : "mixed sources — see below"}).
         Enough relief for altitudes to be worth using.
       </div>`;
-      document.getElementById("useAlt").checked = true;
     }
 
     box.innerHTML = verdict +
@@ -740,9 +739,8 @@ async function checkElevations() {
 
     drawJson();
   } catch (e) {
+    if (myId !== elevRequestId) return;
     box.innerHTML = `<div class="msg err">Elevation lookup failed: ${e.message}</div>`;
-  } finally {
-    btn.disabled = false;
   }
 }
 
@@ -794,7 +792,7 @@ async function loadCurrent() {
 
 async function submit() {
   const btn = document.getElementById("btnSubmit");
-  const withAlt = document.getElementById("useAlt").checked;
+  const withAlt = state.useAlt;
 
   const d = haversine(state.start, state.finish);
   const ok = confirm(
@@ -921,9 +919,7 @@ document.getElementById("btnLoad").onclick = loadCurrent;
 document.getElementById("btnClear").onclick = clearAll;
 document.getElementById("btnSubmit").onclick = submit;
 document.getElementById("btnLocate").onclick = locate;
-document.getElementById("btnElev").onclick = checkElevations;
 document.getElementById("btnPanel").onclick = togglePanel;
-document.getElementById("useAlt").onchange = drawJson;
 
 watchLayout();
 
