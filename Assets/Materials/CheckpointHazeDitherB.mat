@@ -25,11 +25,17 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
+    - _DitherCellPx: 2
     - _DriftAmount: 0.05
     - _DriftPeriod: 10
     - _DriftSteps: 16
+    - _HeightCentre: 0.42
+    - _HeightFalloff: 0.55
     - _Intensity: 0.4
     - _Radius: 0.9
+    - _ScrollSpeed: 7
+    - _WidthInner: 0.25
+    - _WidthOuter: 0.5
     - _ZTest: 8
     m_Colors:
     - _RimColor: {r: 0.05, g: 0.45, b: 0.95, a: 1}

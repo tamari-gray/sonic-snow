@@ -27,6 +27,7 @@ Material:
     m_Floats:
     - _Intensity: 1.5
     - _PulseAmount: 0.12
+    - _PulseSpeed: 1.6
     - _Radius: 0.85
     - _Rings: 5
     - _SpinSpeed: 0.3

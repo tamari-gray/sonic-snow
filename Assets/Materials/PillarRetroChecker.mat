@@ -19,7 +19,7 @@ Material:
   m_CustomRenderQueue: -1
   stringTagMap: {}
   disabledShaderPasses: []
-  m_LockedProperties:
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs: []
@@ -33,6 +33,6 @@ Material:
     - _TopFadeRange: 6
     - _TopFadeStart: 13
     m_Colors:
-    - _CoreColor: {r: 1, g: 0.292, b: 0.003, a: 1}
+    - _CoreColor: {r: 3.482202, g: 1.016803, b: 0.010446606, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

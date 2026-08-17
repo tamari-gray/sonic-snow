@@ -25,6 +25,12 @@ public static class XREALCanvasConversion
         "Canvas",
         "UsernameCanvas",
         "CalibrationScreen",
+        // Missed in the original port pass — FinishScoreUI builds this canvas at runtime
+        // rather than it being a static pre-existing object, so it wasn't caught by whatever
+        // swept the scene for canvases at the time. Left at ScreenSpaceOverlay (the Unity
+        // default), which renders nothing at all in an HMD — confirmed 2026-08-17 as why the
+        // finish score screen never appeared on the glasses despite Show() running correctly.
+        "FinishScoreCanvas",
     };
 
     private const float DistanceFromCamera = 2f;

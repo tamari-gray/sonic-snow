@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using TMPro;
 
 /// <summary>
 /// Restyles the checkpoint marker to the early-90s console look: stepped rim shading, a
@@ -33,7 +34,9 @@ public static class RetroCheckpointSetup
         var hazeB = BuildHazeMaterial("Assets/Materials/CheckpointHazeDitherB.mat",
                                       new Color(0f, 0.36f, 0.90f, 1f), 0.4f, 10f, 0.05f);
 
+        FlattenLabelMaterial();
         ApplyLabelDropShadow();
+        ApplyLabelBob();
         RewirePrefab(dome, pad, hazeA, hazeB);
 
         AssetDatabase.SaveAssets();
@@ -124,28 +127,170 @@ public static class RetroCheckpointSetup
         return mat;
     }
 
+    // Reuses the colour the material's old shader-underlay shadow used, so switching
+    // technique doesn't also change how the shadow looks — same "keep the same colours"
+    // rule the finish-line text follows (its own shadow is a tint on the SAME face
+    // material, not a separate colour scheme).
+    static readonly Color LabelShadowColour = new Color(0f, 0.08f, 0.30f, 1f);
+
     /// <summary>
-    /// Hard TMP drop shadow: solid deep blue, offset down-right, zero softness so it reads
-    /// as a stamped sprite shadow rather than a blur.
+    /// Strips the built-in outline/glow/underlay shader features off the checkpoint label's
+    /// material — was previously carrying all three at once (outline width 0.21, glow, AND a
+    /// shader underlay), which reads as "outline text", not the clean-face-plus-shadow look
+    /// FinishLineText has. Underlay is redundant now anyway: <see cref="ApplyLabelDropShadow"/>
+    /// replaces it with a real duplicate GameObject, matching how FinishLineText's own shadow
+    /// works (FinishLineTextShadow is a child of FinishLineText, not a shader effect) and how
+    /// RetroBurstEffect.BuildLabel already builds every other shadow label in this project.
     /// </summary>
-    static void ApplyLabelDropShadow()
+    static void FlattenLabelMaterial()
     {
         var mat = AssetDatabase.LoadAssetAtPath<Material>(LabelMaterialPath);
         if (mat == null)
         {
-            Debug.LogWarning($"[RetroCheckpointSetup] Label material not found at {LabelMaterialPath} — skipping drop shadow.");
+            Debug.LogWarning($"[RetroCheckpointSetup] Label material not found at {LabelMaterialPath} — skipping.");
             return;
         }
 
-        mat.EnableKeyword("UNDERLAY_ON");
-        mat.SetColor("_UnderlayColor", new Color(0f, 0.08f, 0.30f, 1f));
-        mat.SetFloat("_UnderlayOffsetX", 0.06f);
-        mat.SetFloat("_UnderlayOffsetY", -0.06f);
-        mat.SetFloat("_UnderlaySoftness", 0f);
-        mat.SetFloat("_UnderlayDilate", 0.1f);
+        mat.SetFloat("_OutlineWidth", 0f);
+        mat.DisableKeyword("GLOW_ON");
+        mat.DisableKeyword("UNDERLAY_ON");
         EditorUtility.SetDirty(mat);
 
-        Debug.Log("[RetroCheckpointSetup] Hard drop shadow enabled on the checkpoint label preset.");
+        Debug.Log("[RetroCheckpointSetup] Outline/glow/underlay stripped off the checkpoint label material — clean face only now.");
+    }
+
+    /// <summary>
+    /// Builds "CheckPointTextShadow" as a child of CheckPointText — same technique as
+    /// FinishLineText/FinishLineTextShadow and RetroBurstEffect.BuildLabel's shadow labels:
+    /// a duplicate text object, same font/material, offset and tinted, rather than a shader
+    /// effect. Offset uses the same fontSize * 0.15 convention RetroBurstEffect already
+    /// established, so this reads as the same "kind" of shadow as the rest of the project's
+    /// retro text, not a one-off.
+    /// </summary>
+    static void ApplyLabelDropShadow()
+    {
+        var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+        if (root == null)
+        {
+            Debug.LogError($"[RetroCheckpointSetup] Could not load {PrefabPath}");
+            return;
+        }
+
+        try
+        {
+            Transform label = FindDeep(root.transform, "CheckPointText");
+            if (label == null)
+            {
+                Debug.LogError("[RetroCheckpointSetup] CheckPointText not found — skipping shadow.");
+                return;
+            }
+
+            TMP_Text mainText = label.GetComponent<TMP_Text>();
+            if (mainText == null)
+            {
+                Debug.LogError("[RetroCheckpointSetup] CheckPointText has no TMP_Text — skipping shadow.");
+                return;
+            }
+
+            Transform existingShadow = label.Find("CheckPointTextShadow");
+            GameObject shadowGo = existingShadow != null ? existingShadow.gameObject : new GameObject("CheckPointTextShadow");
+            shadowGo.transform.SetParent(label, false);
+
+            // Z needs to be big enough to unambiguously win transparent depth-sorting, not
+            // just nudge the mesh — 0.02 here (borrowed from RetroBurstEffect's much smaller,
+            // close-up VFX context) turned out to be noise-level once shrunk by this label's
+            // own 0.26 localScale, on a marker viewed from up to 20m away. The sort then came
+            // down to floating-point noise, which is why it read correctly in a static Editor
+            // preview but flipped (shadow drawing in FRONT) on the actual glasses — confirmed
+            // 2026-08-17. A Z offset on the same order as the X/Y offset removes the ambiguity.
+            float offset = mainText.fontSize * 0.15f;
+            shadowGo.transform.localPosition = new Vector3(offset, -offset, offset * 0.3f);
+
+            TextMeshPro shadowText = shadowGo.GetComponent<TextMeshPro>();
+            if (shadowText == null) shadowText = shadowGo.AddComponent<TextMeshPro>();
+
+            shadowText.text = mainText.text;
+            shadowText.font = mainText.font;
+            shadowText.fontSharedMaterial = mainText.fontSharedMaterial;
+            shadowText.fontSize = mainText.fontSize;
+            shadowText.alignment = mainText.alignment;
+            shadowText.color = LabelShadowColour;
+
+            // Behind the main text in draw order, same as every other shadow-duplicate build
+            // site in this project.
+            shadowGo.transform.SetAsFirstSibling();
+
+            PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+            Debug.Log("[RetroCheckpointSetup] CheckPointTextShadow built/updated.");
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
+    static Transform FindDeep(Transform root, string name)
+    {
+        if (root.name == name) return root;
+        foreach (Transform child in root)
+        {
+            var found = FindDeep(child, name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// CheckPointText's animation is now the same StepBob 2-frame vertical bob
+    /// FinishLineText uses (same offsetY/frameRate), not DistanceLabelScaler's
+    /// distance-driven scale/lift/fade/bob system.
+    ///
+    /// History, in order: DistanceLabelScaler's farScale had drifted to 0.2 while the label
+    /// itself is authored larger, making the runtime size never match the static Inspector
+    /// preview; then the whole distance-scaling approach was found "too intense" and removed
+    /// by request 2026-08-17; then explicitly replaced with StepBob "to function just like
+    /// the finish line text animation" the same day. Don't reintroduce DistanceLabelScaler
+    /// here without checking whether that request still stands.
+    ///
+    /// Only touches the StepBob component — never localPosition/localScale, both of which
+    /// have been hand-tuned in the Editor since and must survive a re-run untouched.
+    /// </summary>
+    static void ApplyLabelBob()
+    {
+        var root = PrefabUtility.LoadPrefabContents(PrefabPath);
+        if (root == null)
+        {
+            Debug.LogError($"[RetroCheckpointSetup] Could not load {PrefabPath}");
+            return;
+        }
+
+        try
+        {
+            Transform label = FindDeep(root.transform, "CheckPointText");
+            if (label == null)
+            {
+                Debug.LogError("[RetroCheckpointSetup] CheckPointText not found — skipping bob setup.");
+                return;
+            }
+
+            DistanceLabelScaler stale = label.GetComponent<DistanceLabelScaler>();
+            if (stale != null) Object.DestroyImmediate(stale);
+
+            StepBob bob = label.GetComponent<StepBob>();
+            if (bob == null) bob = label.gameObject.AddComponent<StepBob>();
+
+            SerializedObject so = new SerializedObject(bob);
+            so.FindProperty("offsetY").floatValue = 0.05f;
+            so.FindProperty("frameRate").floatValue = 1.67f;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+            Debug.Log("[RetroCheckpointSetup] CheckPointText now uses StepBob, matching FinishLineText.");
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
     }
 
     static void RewirePrefab(Material dome, Material pad, Material hazeA, Material hazeB)

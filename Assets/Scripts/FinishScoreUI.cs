@@ -193,6 +193,17 @@ public class FinishScoreUI : MonoBehaviour
         // big panel below it is width:100%. Each child sets its own preferred width instead.
         columnLayout.childForceExpandWidth = false;
         columnLayout.childForceExpandHeight = false;
+        // Width is set explicitly on Badge/Panel themselves (see BuildBadge/BuildPanel)
+        // rather than left to childControlWidth. That flag was tried first — it's the usual
+        // fix for "LayoutElement.preferredWidth being ignored" — but even with it on,
+        // LayoutUtility.GetPreferredWidth kept returning 0 for these children despite their
+        // LayoutElement correctly reporting 760/1240, for reasons that didn't resolve under
+        // investigation 2026-08-17 (height computed correctly the whole time via the same
+        // group, only width was wrong — an asymmetry that pointed at something specific to
+        // this nesting rather than a simple missing flag). Explicit sizeDelta sidesteps it
+        // entirely. Height still comes from the group normally.
+        columnLayout.childControlWidth = false;
+        columnLayout.childControlHeight = true;
         column.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         BuildBadge(columnRect);
@@ -205,6 +216,10 @@ public class FinishScoreUI : MonoBehaviour
         LayoutElement outerLayout = outer.AddComponent<LayoutElement>();
         outerLayout.preferredWidth = 380f * RetroUI.Scale;
         outerLayout.preferredHeight = 78f * RetroUI.Scale;
+        // childControlWidth is off on the parent column now (see Build's comment) — set width
+        // directly rather than trust the group to read it back off this LayoutElement.
+        RectTransform outerRect = (RectTransform)outer.transform;
+        outerRect.sizeDelta = new Vector2(outerLayout.preferredWidth, outerRect.sizeDelta.y);
 
         GameObject inner = RetroUI.Block("BadgeInner", (RectTransform)outer.transform, BgPanel);
         RetroUI.Inset(inner, 6f * RetroUI.Scale);
@@ -233,6 +248,9 @@ public class FinishScoreUI : MonoBehaviour
         GameObject outer = inner.transform.parent.gameObject;
         LayoutElement outerLayout = outer.AddComponent<LayoutElement>();
         outerLayout.preferredWidth = 620f * RetroUI.Scale;
+        // See BuildBadge's comment — width set directly, not left to the parent group.
+        RectTransform outerRect = (RectTransform)outer.transform;
+        outerRect.sizeDelta = new Vector2(outerLayout.preferredWidth, outerRect.sizeDelta.y);
 
         nameLabel = RetroUI.Label(innerRect, "PLAYER", 17f * RetroUI.Scale, Color.white,
             TextAlignmentOptions.Center, font);
@@ -252,6 +270,8 @@ public class FinishScoreUI : MonoBehaviour
         layout.spacing = 10f * RetroUI.Scale;
         layout.childForceExpandWidth = true;
         layout.childForceExpandHeight = false;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
         stats.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         timeValue = BuildStatRow(statsRect, "TIME", Blue);

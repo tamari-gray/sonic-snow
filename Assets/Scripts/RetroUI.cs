@@ -94,6 +94,9 @@ public static class RetroUI
         layout.childAlignment = TextAnchor.MiddleLeft;
         layout.childForceExpandWidth = false;
         layout.childForceExpandHeight = false;
+        // See BorderedPanel's note: expand settings do nothing without childControl also on.
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
 
         return go;
     }
@@ -270,6 +273,14 @@ public static class RetroUI
         outerLayout.padding = new RectOffset(5, 5, 5, 5);
         outerLayout.childForceExpandWidth = true;
         outerLayout.childForceExpandHeight = false;
+        // childForceExpandWidth alone does nothing — Unity's LayoutGroup only applies expand
+        // (or any other per-child sizing) when childControlWidth/Height is also true. Left
+        // unset, every child of this panel — and anything built on top of it, like
+        // FinishScoreUI — silently stayed at RectTransform's raw 100x100 default regardless
+        // of any LayoutElement.preferredWidth set on it. Confirmed 2026-08-17 as the actual
+        // cause of the finish score screen reading "thin and jumbled".
+        outerLayout.childControlWidth = true;
+        outerLayout.childControlHeight = true;
         outer.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         GameObject inner = Block("PanelInner", (RectTransform)outer.transform, fillColour);
@@ -278,6 +289,8 @@ public static class RetroUI
         innerLayout.spacing = spacing;
         innerLayout.childForceExpandWidth = true;
         innerLayout.childForceExpandHeight = false;
+        innerLayout.childControlWidth = true;
+        innerLayout.childControlHeight = true;
         inner.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
         return inner;

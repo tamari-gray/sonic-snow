@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.Collections;
 using System.Text;
+using Unity.XR.XREAL.Samples;
 
 public class GameLogic : MonoBehaviour
 {
@@ -403,6 +404,13 @@ public class GameLogic : MonoBehaviour
 
         if (FinishLinePillar.Instance != null && GeoAnchor.Instance != null)
             FinishCollectEffect.Play(GeoAnchor.Instance.Root, FinishLinePillar.Instance.LocalPosition);
+
+        // Finalizes the capture file and hands it to the device's gallery — see
+        // FirstPersonStreammingCast.StopIfRecording's doc comment for why this, not the
+        // recording-just-started flag, is what actually needs to run for anything to be
+        // retrievable afterward.
+        if (FirstPersonStreammingCast.Instance != null)
+            FirstPersonStreammingCast.Instance.StopIfRecording();
 
         if (FinishScoreUI.Instance != null)
             FinishScoreUI.Instance.Show(playerUsername, elapsedSeconds, checkpointsCollected, checkpointsTotal);
