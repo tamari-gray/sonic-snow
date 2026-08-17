@@ -81,11 +81,15 @@ public class CalibrationScreen : MonoBehaviour
              "good enough to let calibration proceed, this one gates actually spawning content.")]
     [SerializeField] private float startAccuracyThreshold = 10f;
 
-    [Tooltip("Off until the First Person View capture stutter (see email to XREAL re: FrameBlender " +
-             "doing a full duplicate Camera.Render() per frame) is resolved. While false: recording " +
-             "never triggers, the 'AR recording setup' line is hidden from this screen entirely, and " +
-             "calibration doesn't wait on it. Flip back to true to re-enable exactly the prior behavior.")]
-    [SerializeField] private bool recordingEnabled = false;
+    [Tooltip("Drives the 'AR recording setup' condition. While false: recording never triggers, the " +
+             "line is hidden from this screen entirely, and calibration doesn't wait on it. Was off " +
+             "for a while over the First Person View capture stutter (see email to XREAL re: " +
+             "FrameBlender doing a full duplicate Camera.Render() per frame), back on now so footage " +
+             "is being captured again while that's chased separately — a stuttering recording is " +
+             "still worth more than no recording. Note the stutter is NOT resolution-bound: dropping " +
+             "ResolutionLevel to Low made it worse, not better (see FirstPersonCaptureSetup), which " +
+             "points at the RGB frame callback being starved rather than at pixel throughput.")]
+    [SerializeField] private bool recordingEnabled = true;
 
     /// <summary>True once calibration is complete and the game may start.</summary>
     public bool IsReady { get; private set; }

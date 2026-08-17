@@ -1649,7 +1649,7 @@ MonoBehaviour:
   m_StreamBtn: {fileID: 1881712848}
   m_StreamText: {fileID: 163945034}
   m_BlendMode: 0
-  m_ResolutionLevel: 0
+  m_ResolutionLevel: 1
   m_CullingMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -2152,6 +2152,7 @@ MonoBehaviour:
   confirmationSeconds: 1.2
   startDistanceThreshold: 10
   startAccuracyThreshold: 10
+  recordingEnabled: 1
 --- !u!4 &1867507130
 Transform:
   m_ObjectHideFlags: 0

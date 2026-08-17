@@ -71,14 +71,15 @@ public static class FirstPersonCaptureSetup
         serialized.ApplyModifiedPropertiesWithoutUndo();
 
         capture.m_BlendMode = BlendMode.Blend; // real world (XREAL Eye) + AR content, combined
-        // Tried Low after Middle stuttered — it got WORSE, not better (2026-08-17). That's
-        // evidence against "encoder/compositing GPU cost scales with resolution" and for
-        // "the stutter isn't resolution-bound at all" (possibly an extra resize/scale pass,
-        // or just thermal/contention noise between runs). Since dropping resolution didn't
-        // help, back to High — no reason left to sacrifice quality for a theory that didn't
-        // pan out. Revisit the real bottleneck (GPU compositing contention, thermal
-        // throttling — see the "processing power" discussion this session) if it's still bad.
-        capture.m_ResolutionLevel = FirstPersonStreammingCast.ResolutionLevel.High;
+        // Middle, set 2026-08-17 for the logcat reproduction XREAL support asked for. History:
+        // Middle stuttered, Low was tried and got WORSE not better, so it went back to High —
+        // evidence against "cost scales with resolution" and for "the stutter isn't
+        // resolution-bound at all". Middle is the middle setting of a knob we've now shown
+        // doesn't drive the problem, which makes it the honest one to reproduce on: it rules
+        // out "you were just asking the device for too many pixels" without pretending the
+        // resolution is what matters. Note GetResolutionByLevel sorts DESCENDING, so Middle is
+        // the second-LARGEST supported resolution, not a midpoint in pixel count.
+        capture.m_ResolutionLevel = FirstPersonStreammingCast.ResolutionLevel.Middle;
         capture.m_CullingMask = -1;
         capture.m_AudioState = AudioState.ApplicationAndMicAudio; // game SFX + narration, matches XREAL's own demo default
         capture.useGreenBackGround = false;
