@@ -33,6 +33,6 @@ Material:
     - _SpinSpeed: 0.3
     m_Colors:
     - _CoreColor: {r: 0, g: 0.12, b: 0.38, a: 1}
-    - _RimColor: {r: 0.55, g: 0.92, b: 1, a: 1}
+    - _RimColor: {r: 0, g: 0.21821164, b: 0.26415092, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
