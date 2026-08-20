@@ -1,7 +1,6 @@
 using UnityEngine;
 using TMPro;
 using UnityEngine.XR.ARFoundation;
-using Unity.XR.XREAL.Samples;
 
 /// <summary>
 /// Blocking startup screen that holds the player on the launch ritual until the app
@@ -14,21 +13,25 @@ using Unity.XR.XREAL.Samples;
 /// they lower the phone during startup and every placement is off by however far
 /// they moved.
 ///
-/// Readiness is six separate conditions, reported individually so a stall on the
+/// Readiness is five separate conditions, reported individually so a stall on the
 /// hill is diagnosable rather than a mystery spinner. The fifth — distance to start —
 /// used to live in GameLogic as a per-frame check that ran only after this screen
 /// closed. It moved here instead: since this screen only runs once per app launch and
 /// the current workflow is a fresh launch per run anyway, there's no need for a
-/// separate live "searching for start" loop afterwards. The sixth — AR recording
-/// setup — auto-starts XREAL's First Person View capture the moment this screen
-/// appears and blocks on it the same way the other five block, so promo footage is
-/// guaranteed running before the race starts rather than missing its first few
-/// seconds. It's a trigger-and-wait rather than a real precondition (nothing about it
-/// being incomplete blocks placement the way an unsettled AR pose does), but gating on
-/// it here reuses the same fail-safe timeout every other condition already has, rather
-/// than needing one of its own. Once all six clear, the race is triggered immediately
-/// — checkpoints and the finish beam spawn and the countdown starts the moment this
-/// screen closes.
+/// separate live "searching for start" loop afterwards. Once all five clear, the race
+/// is triggered immediately — checkpoints and the finish beam spawn and the countdown
+/// starts the moment this screen closes.
+///
+/// AR capture used to be a sixth condition here: it auto-started XREAL's First Person
+/// View capture the moment this screen appeared and blocked on it the same way the
+/// other five block. That coupling is gone. Recording now starts in Finish(), once
+/// calibration has already cleared, which is both what was asked for and strictly
+/// better: the capture never was a real precondition (nothing about it being
+/// incomplete blocks placement the way an unsettled AR pose does), yet gating on it
+/// meant the Android screen-capture consent dialog sat between the player and the
+/// start of their race. Starting after the fact costs nothing — clearing "distance to
+/// start" means the player is standing at the gate, so the recording still begins
+/// before they move.
 /// </summary>
 public class CalibrationScreen : MonoBehaviour
 {
@@ -81,14 +84,13 @@ public class CalibrationScreen : MonoBehaviour
              "good enough to let calibration proceed, this one gates actually spawning content.")]
     [SerializeField] private float startAccuracyThreshold = 10f;
 
-    [Tooltip("Drives the 'AR recording setup' condition. While false: recording never triggers, the " +
-             "line is hidden from this screen entirely, and calibration doesn't wait on it. Was off " +
-             "for a while over the First Person View capture stutter (see email to XREAL re: " +
-             "FrameBlender doing a full duplicate Camera.Render() per frame), back on now so footage " +
-             "is being captured again while that's chased separately — a stuttering recording is " +
-             "still worth more than no recording. Note the stutter is NOT resolution-bound: dropping " +
-             "ResolutionLevel to Low made it worse, not better (see FirstPersonCaptureSetup), which " +
-             "points at the RGB frame callback being starved rather than at pixel throughput.")]
+    [Tooltip("Master switch for AR race capture. True starts RGBCameraCapture recording the moment " +
+             "calibration completes; GameLogic.OnFinishLineReached() stops it. False means recording " +
+             "never starts at all. This no longer gates calibration — the screen-capture consent " +
+             "dialog is no longer in the way of starting a race. Note OS-level AR Screen Recording " +
+             "is NOT an alternative to leave this off for: nebula deliberately kills it when a " +
+             "third-party app launches, confirmed by the device's own popup, so in-app capture is " +
+             "the only route to AR footage.")]
     [SerializeField] private bool recordingEnabled = true;
 
     /// <summary>True once calibration is complete and the game may start.</summary>
@@ -103,8 +105,6 @@ public class CalibrationScreen : MonoBehaviour
     private float confirmationTimer;
     private bool confirming;
 
-    private bool recordingTriggered;
-    private bool warnedNoCapturePanel;
 
     private void Awake()
     {
@@ -115,31 +115,26 @@ public class CalibrationScreen : MonoBehaviour
     }
 
     /// <summary>
-    /// Starts recording the instant the capture panel exists — once, not every frame. Reads
-    /// FirstPersonStreammingCast.Instance rather than searching the scene graph, same singleton
-    /// convention as GameLogic.Instance elsewhere. By the time this runs (inside Update, so
-    /// after every Awake this frame has already fired) it's populated if the panel exists at all.
+    /// Kicks off the race recording, once, as calibration completes. Everything after this point
+    /// is asynchronous and none of it is waited on: StartRecording() returns immediately, the
+    /// Android screen-capture consent dialog is answered while the countdown runs, and if the
+    /// player denies it the race is entirely unaffected. That is the deliberate trade — a missing
+    /// recording is a far better failure than a race that won't start.
     /// </summary>
-    private void UpdateRecording()
+    private void StartRecording()
     {
-        FirstPersonStreammingCast recordingCapture = FirstPersonStreammingCast.Instance;
+        RGBCameraCapture capture = RGBCameraCapture.Instance;
 
-        if (recordingCapture == null)
+        if (capture == null)
         {
-            if (!warnedNoCapturePanel)
-            {
-                warnedNoCapturePanel = true;
-                Debug.LogWarning("[CalibrationScreen] No FirstPersonCapture panel found — " +
-                                 "AR recording setup will never complete on its own and will fall through on timeout.");
-            }
+            Debug.LogWarning("[CalibrationScreen] recordingEnabled is on but no RGBCameraCapture is " +
+                             "in the scene — run Sonic Snow > XREAL > Set Up RGB Camera Capture. " +
+                             "Racing anyway, with no footage.");
             return;
         }
 
-        if (!recordingTriggered)
-        {
-            recordingCapture.TriggerRecord();
-            recordingTriggered = true;
-        }
+        Debug.Log("[CalibrationScreen] Calibration cleared — starting AR race capture.");
+        capture.StartRecording();
     }
 
     private void Update()
@@ -153,13 +148,6 @@ public class CalibrationScreen : MonoBehaviour
             confirmationTimer += Time.deltaTime;
             if (confirmationTimer >= confirmationSeconds) Finish();
             return;
-        }
-
-        bool recording = true;
-        if (recordingEnabled)
-        {
-            UpdateRecording();
-            recording = FirstPersonStreammingCast.Instance != null && FirstPersonStreammingCast.Instance.RecordingConfirmed;
         }
 
         bool tracking = ARSession.state == ARSessionState.SessionTracking;
@@ -194,8 +182,6 @@ public class CalibrationScreen : MonoBehaviour
                 Line("GPS fix", gpsReady, GpsDetail(location)) + "\n" +
                 Line("Distance to start", atStartLine, StartDistanceDetail(distance, location, routeLoaded));
 
-            if (recordingEnabled) status += "\n" + Line("AR recording setup", recording, RecordingDetail());
-
             statusText.text = status;
         }
 
@@ -203,15 +189,15 @@ public class CalibrationScreen : MonoBehaviour
 
         bool timedOut = overallTimeoutSeconds > 0f && elapsedOnScreen >= overallTimeoutSeconds;
 
-        if (!(tracking && steady && routeLoaded && gpsReady && atStartLine && recording))
+        if (!(tracking && steady && routeLoaded && gpsReady && atStartLine))
         {
             if (!timedOut) return;
 
             Debug.LogWarning($"[CalibrationScreen] Timed out after {overallTimeoutSeconds:F0}s and " +
                              $"proceeding anyway. tracking={tracking} steady={steady} " +
-                             $"route={routeLoaded} gps={gpsReady} atStartLine={atStartLine} " +
-                             $"recording={recording}. Placement will be rough, and if GPS never " +
-                             $"arrives the race will start wherever the player happens to be standing.");
+                             $"route={routeLoaded} gps={gpsReady} atStartLine={atStartLine}. " +
+                             $"Placement will be rough, and if GPS never arrives the race will " +
+                             $"start wherever the player happens to be standing.");
         }
 
         // Everything is up and the phone has been still for a moment. Latch the
@@ -294,6 +280,11 @@ public class CalibrationScreen : MonoBehaviour
         if (panelRoot != null) panelRoot.SetActive(false);
 
         Debug.Log("[CalibrationScreen] Calibration complete — game ready.");
+
+        // Deliberately after IsReady and after the panel is hidden. GameLogic polls IsReady to
+        // trigger the race, so starting the capture first would put the screen-capture consent
+        // dialog in front of a player who is already standing at the gate waiting to go.
+        if (recordingEnabled) StartRecording();
     }
 
     private void SpinSpinner()
@@ -330,18 +321,6 @@ public class CalibrationScreen : MonoBehaviour
 
         return $"{distance:F0}m away, ±{location.HorizontalAccuracy:F0}m " +
                $"(need <{startDistanceThreshold:F0}m, ±{startAccuracyThreshold:F0}m)";
-    }
-
-    /// <summary>Says why capture isn't running yet, same "don't just show a spinner" reasoning
-    /// as GpsDetail — a missing panel and a recording that just hasn't started yet need
-    /// different fixes, and a bare "..." can't tell those apart.</summary>
-    private string RecordingDetail()
-    {
-        FirstPersonStreammingCast recordingCapture = FirstPersonStreammingCast.Instance;
-        if (recordingCapture == null) return "capture panel not found";
-        if (recordingCapture.RecordingConfirmed) return "recording";
-        if (recordingCapture.RecordingFailed) return recordingCapture.RecordingFailureReason;
-        return "waiting for you to allow recording";
     }
 
     private static string Line(string label, bool done, string detail = null)
