@@ -409,15 +409,16 @@ public class GameLogic : MonoBehaviour
         else
             Debug.LogWarning("FinishScoreUI instance is null — run Sonic Snow > Set Up Finish Score.");
 
-        // Finalizes the capture file and hands it to the device's gallery — see
-        // RGBCameraCapture.StopRecording's doc comment for why this, not the
-        // recording-just-started flag, is what actually needs to run for anything to be
-        // retrievable afterward. This is the ONLY stop trigger: there is no pause/quit safety
-        // net and no segment timer, so a run that never reaches the finish line saves nothing.
-        // Deliberately after the scoreboard is shown, so the run's final score lands in the
-        // footage rather than the video cutting out a frame before it appears.
+        // Finalizes the capture file and hands it to the device's gallery 5 seconds after this
+        // moment, not immediately — see RGBCameraCapture.StopRecording's doc comment for why the
+        // stop itself, not the recording-just-started flag, is what actually needs to run for
+        // anything to be retrievable. The delay is deliberate: it gives the finish celebration
+        // (FinishCollectEffect, the scoreboard shown just above) a few seconds of real footage
+        // instead of the video cutting out on the exact frame the beam is crossed.
+        // RGBCameraCapture.stopAfterSeconds remains a second, earlier stop trigger for hardware
+        // that never reaches this method at all (no GPS fix to ever trigger the finish line).
         if (RGBCameraCapture.Instance != null && RGBCameraCapture.Instance.IsRecording)
-            RGBCameraCapture.Instance.StopRecording();
+            StartCoroutine(StopRecordingAfterDelay(5f));
 
         if (skipUsernameEntry)
         {
@@ -431,6 +432,19 @@ public class GameLogic : MonoBehaviour
         // against the leaderboard's own GET, and the GET usually wins — so the player
         // finishes a run and their time isn't on the board they're looking at.
         StartCoroutine(SubmitThenReturn(playerUsername, elapsedSeconds));
+    }
+
+    /// <summary>Stops the capture a fixed delay after the finish line is reached, so the finish
+    /// celebration and scoreboard land in the footage. Re-checks IsRecording rather than assuming:
+    /// RGBCameraCapture.stopAfterSeconds may already have stopped it in the meantime, and
+    /// StopRecording's own "not recording" branch would just log a harmless warning either way, but
+    /// checking first keeps that warning out of the normal-path logs.</summary>
+    private IEnumerator StopRecordingAfterDelay(float delaySeconds)
+    {
+        yield return new WaitForSeconds(delaySeconds);
+
+        if (RGBCameraCapture.Instance != null && RGBCameraCapture.Instance.IsRecording)
+            RGBCameraCapture.Instance.StopRecording();
     }
 
     private IEnumerator SubmitThenReturn(string username, float elapsedSeconds)

@@ -11,9 +11,12 @@ using Unity.XR.XREAL;
 /// Unity editor, and re-running is idempotent.
 ///
 /// Unlike FirstPersonCaptureSetup this builds no Canvas and no buttons. Recording is driven purely
-/// by the race flow — CalibrationScreen.Finish() starts it, GameLogic.OnFinishLineReached() stops
-/// it — so there is nothing for a player to press, and the old setup's hidden-canvas dance
-/// (build two buttons, then disable the canvas because no input can reach them) was pure ceremony.
+/// by the race flow — CalibrationScreen.RequestRecordingPermissionAndStart() starts it as soon as
+/// the player accepts the recording permission/consent prompts (its own calibration condition),
+/// and it stops either 5 seconds after GameLogic.OnFinishLineReached() or
+/// RGBCameraCapture.stopAfterSeconds after RecordingConfirmed, whichever comes first — so there is
+/// nothing for a player to press, and the old setup's hidden-canvas dance (build two buttons, then
+/// disable the canvas because no input can reach them) was pure ceremony.
 /// The component therefore sits on a bare GameObject at scene root. The SDK parents its own
 /// capture rig under Camera.main by itself, from
 /// FrameCaptureContext.GetCaptureBehaviourByMode, so this object's position is irrelevant.
@@ -98,9 +101,10 @@ public static class RGBCameraCaptureSetup
         EnableRecordingOnCalibrationScreen();
         DisableConflictingARCameraManager();
 
-        Debug.Log("[RGBCameraCaptureSetup] RGBCameraCapture wired for Blend mode. Starts at " +
-                  "CalibrationScreen.Finish(), auto-stops 10s after RecordingConfirmed (or earlier at " +
-                  "GameLogic.OnFinishLineReached()). Requires CAMERA + RECORD_AUDIO + " +
+        Debug.Log("[RGBCameraCaptureSetup] RGBCameraCapture wired for Blend mode. Starts as soon as " +
+                  "the player accepts the recording permission calibration condition, stops 5s after " +
+                  "GameLogic.OnFinishLineReached() (or 10s after RecordingConfirmed as a fallback if " +
+                  "the finish line is never reached). Requires CAMERA + RECORD_AUDIO + " +
                   "FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PROJECTION, all already present in " +
                   "XREALSettings.");
     }

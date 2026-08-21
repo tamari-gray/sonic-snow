@@ -1,5 +1,7 @@
+using System.Collections;
 using UnityEngine;
 using TMPro;
+using UnityEngine.Android;
 using UnityEngine.XR.ARFoundation;
 
 /// <summary>
@@ -13,25 +15,31 @@ using UnityEngine.XR.ARFoundation;
 /// they lower the phone during startup and every placement is off by however far
 /// they moved.
 ///
-/// Readiness is five separate conditions, reported individually so a stall on the
-/// hill is diagnosable rather than a mystery spinner. The fifth — distance to start —
-/// used to live in GameLogic as a per-frame check that ran only after this screen
-/// closed. It moved here instead: since this screen only runs once per app launch and
-/// the current workflow is a fresh launch per run anyway, there's no need for a
-/// separate live "searching for start" loop afterwards. Once all five clear, the race
-/// is triggered immediately — checkpoints and the finish beam spawn and the countdown
+/// Readiness is six separate conditions, reported individually so a stall on the
+/// hill is diagnosable rather than a mystery spinner. "Distance to start" — used to
+/// live in GameLogic as a per-frame check that ran only after this screen closed. It
+/// moved here instead: since this screen only runs once per app launch and the
+/// current workflow is a fresh launch per run anyway, there's no need for a separate
+/// live "searching for start" loop afterwards. Once all six clear, the race is
+/// triggered immediately — checkpoints and the finish beam spawn and the countdown
 /// starts the moment this screen closes.
 ///
-/// AR capture used to be a sixth condition here: it auto-started XREAL's First Person
-/// View capture the moment this screen appeared and blocked on it the same way the
-/// other five block. That coupling is gone. Recording now starts in Finish(), once
-/// calibration has already cleared, which is both what was asked for and strictly
-/// better: the capture never was a real precondition (nothing about it being
-/// incomplete blocks placement the way an unsettled AR pose does), yet gating on it
-/// meant the Android screen-capture consent dialog sat between the player and the
-/// start of their race. Starting after the fact costs nothing — clearing "distance to
-/// start" means the player is standing at the gate, so the recording still begins
-/// before they move.
+/// AR capture (the sixth condition, "Recording permission") is a precondition again,
+/// by request: CAMERA/RECORD_AUDIO and the MediaProjection screen-capture consent are
+/// requested as soon as this screen appears, and recording starts the instant the
+/// player accepts — not after calibration otherwise clears — so the earliest possible
+/// footage is captured and the player isn't left staring at a completed calibration
+/// screen while a dialog they can't see coming interrupts the start of their race.
+/// Android's own permission grants (CAMERA/RECORD_AUDIO) persist across app restarts
+/// once accepted, so this only prompts once ever per install. The one exception is
+/// the MediaProjection ("Start recording or casting?") dialog: Android requires fresh
+/// user consent every time a new capture session begins in a NEW app process — that
+/// cannot be bypassed by app code, it's an OS security boundary, not a setting. XREAL's
+/// SDK does cache the grant for the lifetime of the current process though (see
+/// XREALAndroidPermissionsManager.RequestScreenCapture), so it will not re-prompt
+/// across multiple races run without restarting the app. A denial doesn't block the
+/// race — same trade as before, a missing recording is a far better failure than a
+/// race that won't start.
 /// </summary>
 public class CalibrationScreen : MonoBehaviour
 {
@@ -106,6 +114,15 @@ public class CalibrationScreen : MonoBehaviour
     private bool confirming;
     private string shownStatus;
 
+    /// <summary>True once the recording-permission sequence below has run its course, however it
+    /// came out (granted, denied, or skipped because recordingEnabled is off / no RGBCameraCapture
+    /// in the scene). This, not "recording is actually running", is the calibration condition —
+    /// a denial has to let the player past this screen, not strand them on it.</summary>
+    private bool recordingPermissionResolved;
+
+    /// <summary>Guards RequestRecordingPermissionAndStart so Update() only starts it once.</summary>
+    private bool recordingRequestStarted;
+
 
     private void Awake()
     {
@@ -116,31 +133,90 @@ public class CalibrationScreen : MonoBehaviour
     }
 
     /// <summary>
-    /// Kicks off the race recording, once, as calibration completes. Everything after this point
-    /// is asynchronous and none of it is waited on: StartRecording() returns immediately, the
-    /// Android screen-capture consent dialog is answered while the countdown runs, and if the
-    /// player denies it the race is entirely unaffected. That is the deliberate trade — a missing
-    /// recording is a far better failure than a race that won't start.
+    /// Requests CAMERA/RECORD_AUDIO, then triggers RGBCameraCapture.StartRecording() -- which is
+    /// itself what surfaces the Android MediaProjection ("Start recording or casting?") consent
+    /// dialog, since the XREAL SDK has no separate "just ask" call. Recording therefore starts the
+    /// instant the player accepts that dialog, whichever calibration condition happens to be
+    /// mid-check at the time -- there's no way to decouple "ask" from "start" given the SDK's own
+    /// API shape, and starting as early as possible is what was asked for anyway. Runs once, kicked
+    /// off from Update() the first frame this screen is live.
     /// </summary>
-    private void StartRecording()
+    private IEnumerator RequestRecordingPermissionAndStart()
     {
-        RGBCameraCapture capture = RGBCameraCapture.Instance;
+        if (!recordingEnabled)
+        {
+            recordingPermissionResolved = true;
+            yield break;
+        }
 
+        RGBCameraCapture capture = RGBCameraCapture.Instance;
         if (capture == null)
         {
             Debug.LogWarning("[CalibrationScreen] recordingEnabled is on but no RGBCameraCapture is " +
                              "in the scene — run Sonic Snow > XREAL > Set Up RGB Camera Capture. " +
                              "Racing anyway, with no footage.");
-            return;
+            recordingPermissionResolved = true;
+            yield break;
         }
 
-        Debug.Log("[CalibrationScreen] Calibration cleared — starting AR race capture.");
+#if UNITY_ANDROID
+        yield return RequestRuntimePermission(Permission.Camera);
+        yield return RequestRuntimePermission(Permission.Microphone);
+
+        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+        {
+            Debug.LogWarning("[CalibrationScreen] Camera permission denied — racing anyway, with no footage.");
+            recordingPermissionResolved = true;
+            yield break;
+        }
+#endif
+
+        Debug.Log("[CalibrationScreen] Requesting AR race capture — recording starts the instant this is accepted.");
         capture.StartRecording();
+
+        // Not waited on indefinitely: RecordingConfirmed/RecordingFailed both need the player to
+        // have answered the MediaProjection dialog, which has no fixed time bound. This condition
+        // resolving is what lets calibration proceed either way — the overall calibration timeout
+        // is the real backstop if the player never answers at all.
+        float waited = 0f;
+        while (!capture.RecordingConfirmed && !capture.RecordingFailed && waited < 60f)
+        {
+            waited += Time.deltaTime;
+            yield return null;
+        }
+
+        recordingPermissionResolved = true;
     }
+
+#if UNITY_ANDROID
+    /// <summary>Same request/poll shape as LocationHandler.InitializeLocationService's FineLocation
+    /// request, for CAMERA/RECORD_AUDIO. Once granted, Android remembers it across app restarts on
+    /// its own — no app-side caching needed for these two, only the MediaProjection dialog itself
+    /// (see the class doc comment) can't be persisted that way.</summary>
+    private static IEnumerator RequestRuntimePermission(string permission)
+    {
+        if (Permission.HasUserAuthorizedPermission(permission)) yield break;
+
+        Permission.RequestUserPermission(permission);
+
+        float waited = 0f;
+        while (!Permission.HasUserAuthorizedPermission(permission) && waited < 15f)
+        {
+            waited += Time.deltaTime;
+            yield return null;
+        }
+    }
+#endif
 
     private void Update()
     {
         if (IsReady) return;
+
+        if (!recordingRequestStarted)
+        {
+            recordingRequestStarted = true;
+            StartCoroutine(RequestRecordingPermissionAndStart());
+        }
 
         SpinSpinner();
 
@@ -181,6 +257,7 @@ public class CalibrationScreen : MonoBehaviour
                 Line("Holding steady", steady) + "\n" +
                 Line("Route data", routeLoaded) + "\n" +
                 Line("GPS fix", gpsReady, GpsDetail(location)) + "\n" +
+                Line("Recording permission", recordingPermissionResolved, RecordingPermissionDetail()) + "\n" +
                 Line("Distance to start", atStartLine, StartDistanceDetail(distance, location, routeLoaded));
 
             // Only push it through when it actually reads differently. Assigning TMP_Text.text
@@ -199,15 +276,15 @@ public class CalibrationScreen : MonoBehaviour
 
         bool timedOut = overallTimeoutSeconds > 0f && elapsedOnScreen >= overallTimeoutSeconds;
 
-        if (!(tracking && steady && routeLoaded && gpsReady && atStartLine))
+        if (!(tracking && steady && routeLoaded && gpsReady && recordingPermissionResolved && atStartLine))
         {
             if (!timedOut) return;
 
             Debug.LogWarning($"[CalibrationScreen] Timed out after {overallTimeoutSeconds:F0}s and " +
                              $"proceeding anyway. tracking={tracking} steady={steady} " +
-                             $"route={routeLoaded} gps={gpsReady} atStartLine={atStartLine}. " +
-                             $"Placement will be rough, and if GPS never arrives the race will " +
-                             $"start wherever the player happens to be standing.");
+                             $"route={routeLoaded} gps={gpsReady} recording={recordingPermissionResolved} " +
+                             $"atStartLine={atStartLine}. Placement will be rough, and if GPS never " +
+                             $"arrives the race will start wherever the player happens to be standing.");
         }
 
         // Everything is up and the phone has been still for a moment. Latch the
@@ -291,10 +368,10 @@ public class CalibrationScreen : MonoBehaviour
 
         Debug.Log("[CalibrationScreen] Calibration complete — game ready.");
 
-        // Deliberately after IsReady and after the panel is hidden. GameLogic polls IsReady to
-        // trigger the race, so starting the capture first would put the screen-capture consent
-        // dialog in front of a player who is already standing at the gate waiting to go.
-        if (recordingEnabled) StartRecording();
+        // Recording itself already started (or was denied/skipped) back when the "Recording
+        // permission" condition resolved -- see RequestRecordingPermissionAndStart. Nothing to do
+        // here now; this screen doesn't gate on IsRecording, only on that condition having
+        // resolved one way or the other.
     }
 
     private void SpinSpinner()
@@ -320,6 +397,21 @@ public class CalibrationScreen : MonoBehaviour
             return location.IsRetrying ? $"retrying — {location.LastFailureReason}" : location.LastFailureReason;
 
         return "searching for satellites";
+    }
+
+    /// <summary>Says what's actually being waited on, since "Recording permission" alone doesn't
+    /// distinguish "still waiting on the OS dialog" from "denied" from "off".</summary>
+    private string RecordingPermissionDetail()
+    {
+        if (!recordingEnabled) return "recording off";
+        if (recordingPermissionResolved) return null;
+
+        RGBCameraCapture capture = RGBCameraCapture.Instance;
+        if (capture == null) return "waiting";
+        if (capture.RecordingFailed) return capture.RecordingFailureReason ?? "denied";
+        if (capture.RecordingConfirmed) return "granted";
+
+        return "waiting for you to accept";
     }
 
     /// <summary>Live distance/accuracy readout against both thresholds, so the last few
