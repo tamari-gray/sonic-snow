@@ -69,7 +69,7 @@ public class CalibrationScreen : MonoBehaviour
     [Tooltip("Proceed regardless after this long, in seconds. The steadiness check has its own " +
              "timeout but AR tracking and GPS don't, so without this a denied camera permission " +
              "or a bad fix leaves the player stuck on this screen with no way past it. 0 disables.")]
-    [SerializeField] private float overallTimeoutSeconds = 45f;
+    [SerializeField] private float overallTimeoutSeconds = 30f;
 
     [Tooltip("How long to leave the 'calibrated' confirmation up before hiding, in seconds.")]
     [SerializeField] private float confirmationSeconds = 1.2f;
@@ -104,6 +104,7 @@ public class CalibrationScreen : MonoBehaviour
     private bool trackingSeen;
     private float confirmationTimer;
     private bool confirming;
+    private string shownStatus;
 
 
     private void Awake()
@@ -182,7 +183,16 @@ public class CalibrationScreen : MonoBehaviour
                 Line("GPS fix", gpsReady, GpsDetail(location)) + "\n" +
                 Line("Distance to start", atStartLine, StartDistanceDetail(distance, location, routeLoaded));
 
-            statusText.text = status;
+            // Only push it through when it actually reads differently. Assigning TMP_Text.text
+            // forces a full mesh rebuild of five lines of text every frame, and this panel is on
+            // screen for the whole of calibration — but the lines only change when a tick flips or
+            // the GPS accuracy figure moves, a few times a second at most. Same reasoning as
+            // CheckpointCounterUI. The string is still built each frame, which is the cheap half.
+            if (status != shownStatus)
+            {
+                shownStatus = status;
+                statusText.text = status;
+            }
         }
 
         elapsedOnScreen += Time.deltaTime;

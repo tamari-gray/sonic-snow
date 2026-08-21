@@ -67,6 +67,10 @@ public class RaceTimer : MonoBehaviour
 
     private void UpdateTimerText()
     {
-        timerText.text = elapsedTime.ToString("F3");
+        // SetText with a format, not .text = ToString("F3"): this runs every frame of every race,
+        // and the ToString allocates a fresh string each time for the GC to collect later. TMP's
+        // SetText formats into its own char buffer instead, so the per-frame allocation is zero.
+        // "{0:0.000}" is the same three-decimal output "F3" produced.
+        timerText.SetText("{0:0.000}", elapsedTime);
     }
 }

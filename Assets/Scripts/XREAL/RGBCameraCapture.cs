@@ -58,7 +58,7 @@ public class RGBCameraCapture : MonoBehaviour
     [Tooltip("Blend = real world (XREAL Eye) + AR content combined, which is the only reason this " +
              "path exists at all. Note the SDK silently downgrades this to VirtualOnly when the RGB " +
              "camera is unsupported or already busy — EffectiveBlendMode reports what actually ran.")]
-    [SerializeField] private BlendMode blendMode = BlendMode.Blend;
+    [SerializeField] private BlendMode blendMode = BlendMode.CameraOnly;
 
     [Tooltip("High is the largest supported resolution. Resolution is NOT what drives the capture " +
              "stutter — dropping it to Low previously made things worse, not better — so this is set " +
@@ -67,16 +67,37 @@ public class RGBCameraCapture : MonoBehaviour
 
     [Tooltip("ApplicationAndMicAudio captures game SFX and narration together, matching XREAL's own " +
              "sample default. Requires RECORD_AUDIO, which XREALSettings already grants.")]
-    [SerializeField] private AudioState audioState = AudioState.ApplicationAndMicAudio;
+    [SerializeField] private AudioState audioState = AudioState.None;
 
     [SerializeField] private CaptureSide captureSide = CaptureSide.Single;
     [SerializeField] private LayerMask cullingMask = -1;
     [SerializeField] private bool useGreenBackGround = false;
 
+    [Tooltip("How FrameBlender drives the capture camera into the blend texture. Auto uses " +
+             "Camera.SubmitRenderRequest while an SRP is active (this project runs URP) and " +
+             "Camera.Render() otherwise. LegacyCameraRender forces the SDK's original " +
+             "Camera.Render() call — that is the A/B: if footage is stuttery on Legacy and clean " +
+             "on Auto, the render call was the cause. See the local patch in FrameBlender.cs.")]
+    [SerializeField] private FrameBlender.CaptureRenderMode renderMode = FrameBlender.CaptureRenderMode.Auto;
+
     [Header("Gallery")]
     [Tooltip("Copies the finished file into the device gallery so it can be pulled off without adb. " +
              "The file is written to persistentDataPath either way.")]
     [SerializeField] private bool insertIntoGallery = true;
+
+    [Header("Auto-stop")]
+    [Tooltip("Stops recording this many seconds after RecordingConfirmed goes true -- i.e. this many " +
+             "seconds of actual footage after calibration finishes (recording starts in " +
+             "CalibrationScreen.Finish()). Self-contained and independent of race state, so it fires " +
+             "even if the race never reaches GameLogic.GameState.Racing (no GPS fix on hardware with " +
+             "no GNSS, the finish line never reached, etc.) -- previously this cap lived in " +
+             "GameLogic.CheckRecordingTimeCap gated on the race timer, which meant it silently never " +
+             "fired unless a race was actually underway. Zero disables. " +
+             "GameLogic.OnFinishLineReached() is still a second, earlier stop trigger if the finish " +
+             "line is reached before this fires.")]
+    [SerializeField] private float stopAfterSeconds = 10f;
+
+    private bool m_StopAfterSecondsFired;
 
     private XREALVideoCapture m_VideoCapture;
     private GalleryDataProvider m_GalleryDataTool;
@@ -92,6 +113,14 @@ public class RGBCameraCapture : MonoBehaviour
 
     /// <summary>True only once OnStartedRecordingVideo has fired successfully — frames are landing.</summary>
     public bool RecordingConfirmed { get; private set; }
+
+    /// <summary>
+    /// Time.time at which <see cref="RecordingConfirmed"/> went true, or -1 if it never has. This is
+    /// the only honest clock for "how much footage exists": the gap between StartRecording and
+    /// confirmation is however long the player takes to answer the MediaProjection dialog, which
+    /// measured at 100 seconds in one run. See the auto-stop check in Update().
+    /// </summary>
+    public float RecordingConfirmedTime { get; private set; } = -1f;
 
     /// <summary>True if either async step failed, e.g. the player denied the screen-capture prompt.</summary>
     public bool RecordingFailed { get; private set; }
@@ -109,9 +138,34 @@ public class RGBCameraCapture : MonoBehaviour
     /// <summary>Where the current or last recording was written.</summary>
     public string VideoPath => m_VideoPath;
 
+    /// <summary>
+    /// The SDK's live capture context, or null when nothing is capturing. Exposed for
+    /// <see cref="CaptureFrameDiagnostics"/>, which needs the blender behind it to count renders,
+    /// commits and actual pixel changes. Not cached anywhere: the SDK builds a fresh context,
+    /// blender and encoder on every StartVideoModeAsync and destroys them on stop.
+    /// </summary>
+    public FrameCaptureContext CaptureContext =>
+        m_VideoCapture != null ? m_VideoCapture.GetContext() : null;
+
     private void Awake()
     {
         Instance = this;
+
+        // Pushed before anything can start a capture. FrameBlender reads this static per render,
+        // but the blender is constructed inside StartVideoModeAsync, so setting it here is early
+        // enough for any run and keeps the scene as the authority over the code default.
+        FrameBlender.RenderMode = renderMode;
+    }
+
+    private void Update()
+    {
+        if (m_StopAfterSecondsFired || stopAfterSeconds <= 0f) return;
+        if (!RecordingConfirmed) return;
+        if (Time.time - RecordingConfirmedTime < stopAfterSeconds) return;
+
+        m_StopAfterSecondsFired = true;
+        Debug.Log("[RGBCameraCapture] " + stopAfterSeconds + "s of confirmed recording elapsed -- auto-stopping.");
+        StopRecording();
     }
 
     private string BuildVideoSavePath()
@@ -137,6 +191,7 @@ public class RGBCameraCapture : MonoBehaviour
         RecordingConfirmed = false;
         RecordingFailed = false;
         RecordingFailureReason = null;
+        m_StopAfterSecondsFired = false;
 
         if (m_VideoCapture == null)
         {
@@ -267,6 +322,7 @@ public class RGBCameraCapture : MonoBehaviour
         }
 
         RecordingConfirmed = true;
+        RecordingConfirmedTime = Time.time;
         Debug.Log("[RGBCameraCapture] Started Recording Video! -> " + m_VideoPath);
     }
 
