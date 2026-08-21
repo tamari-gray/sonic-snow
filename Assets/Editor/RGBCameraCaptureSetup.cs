@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.XR.ARFoundation;
 using Unity.XR.XREAL;
 
 /// <summary>
@@ -87,16 +88,38 @@ public static class RGBCameraCaptureSetup
         serialized.FindProperty("cullingMask").intValue = -1;
         serialized.FindProperty("useGreenBackGround").boolValue = false;
         serialized.FindProperty("insertIntoGallery").boolValue = true;
+        serialized.FindProperty("renderMode").enumValueIndex = (int)FrameBlender.CaptureRenderMode.Auto;
+        serialized.FindProperty("stopAfterSeconds").floatValue = 10f;
         serialized.ApplyModifiedPropertiesWithoutUndo();
 
         EditorUtility.SetDirty(root);
 
+        AddDiagnostics(root);
         EnableRecordingOnCalibrationScreen();
+        DisableConflictingARCameraManager();
 
         Debug.Log("[RGBCameraCaptureSetup] RGBCameraCapture wired for Blend mode. Starts at " +
-                  "CalibrationScreen.Finish(), stops at GameLogic.OnFinishLineReached(). Requires " +
-                  "CAMERA + RECORD_AUDIO + FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PROJECTION, " +
-                  "all already present in XREALSettings.");
+                  "CalibrationScreen.Finish(), auto-stops 10s after RecordingConfirmed (or earlier at " +
+                  "GameLogic.OnFinishLineReached()). Requires CAMERA + RECORD_AUDIO + " +
+                  "FOREGROUND_SERVICE + FOREGROUND_SERVICE_MEDIA_PROJECTION, all already present in " +
+                  "XREALSettings.");
+    }
+
+    /// <summary>
+    /// Puts CaptureFrameDiagnostics on the same object. It sits idle until a capture is actually
+    /// running, then logs app fps, capture-camera renders/s, encoder commits/s and — the number that
+    /// settles the argument — how many of those renders produced pixels different from the previous
+    /// frame. Every theory about this stutter so far has been inferred from source or from
+    /// after-the-fact mp4 box scans; this measures it on device in one run.
+    /// </summary>
+    private static void AddDiagnostics(GameObject root)
+    {
+        if (root.GetComponent<CaptureFrameDiagnostics>() == null)
+        {
+            root.AddComponent<CaptureFrameDiagnostics>();
+            Debug.Log("[RGBCameraCaptureSetup] Added CaptureFrameDiagnostics — watch logcat for " +
+                      "[CaptureDiag] lines during a race.");
+        }
     }
 
     /// <summary>
@@ -124,5 +147,55 @@ public static class RGBCameraCaptureSetup
 
         EditorUtility.SetDirty(calibration);
         Debug.Log("[RGBCameraCaptureSetup] CalibrationScreen.recordingEnabled set to true in the scene.");
+    }
+
+    /// <summary>
+    /// Disables Main Camera's ARCameraManager. ROOT CAUSE, confirmed on-device via a bisection on the
+    /// "test" branch (see xreal-first-person-capture memory): ARCameraManager's AR Foundation
+    /// lifecycle (SubsystemLifecycleManager.OnEnable) calls
+    /// Unity.XR.XREAL.XREALCameraProvider.Start(), which opens the SAME native RGB camera resource
+    /// RGBCameraCapture's own XREALVideoCapture path needs for recording. Two consumers pulling from
+    /// one camera stream -- the recorder loses that contention almost every frame, landing a fresh
+    /// image roughly once every few seconds instead of every frame (measured ~0-1 renders/s). With
+    /// just ARCameraManager disabled and nothing else changed, a clean on-device test recovered
+    /// ~27-30 renders/s (matching xreal-hello-world's own working Blend-mode capture, which never had
+    /// an ARCameraManager in its scene at all).
+    ///
+    /// ONLY ARCameraManager, not ARCameraBackground/AROcclusionManager too: disabling all three
+    /// together hung the whole app on launch in testing (killed by Android's watchdog after ~90s,
+    /// never crashed, never recorded) -- almost certainly a teardown-ordering issue between them.
+    /// Leaving ARCameraBackground/AROcclusionManager enabled-but-inert (they subscribe to
+    /// ARCameraManager's frameReceived event, which simply never fires while it's disabled) avoided
+    /// the hang and is sufficient: nothing in this project's own code (CalibrationScreen, GeoAnchor)
+    /// calls into either of them directly, only ARSession.state, which ARCameraManager does not own.
+    /// </summary>
+    private static void DisableConflictingARCameraManager()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            Debug.LogWarning("[RGBCameraCaptureSetup] No MainCamera in the scene — cannot check for a " +
+                             "conflicting ARCameraManager.");
+            return;
+        }
+
+        ARCameraManager arCameraManager = mainCamera.GetComponent<ARCameraManager>();
+        if (arCameraManager == null)
+        {
+            Debug.Log("[RGBCameraCaptureSetup] No ARCameraManager on Main Camera — nothing to disable.");
+            return;
+        }
+
+        if (!arCameraManager.enabled)
+        {
+            Debug.Log("[RGBCameraCaptureSetup] ARCameraManager already disabled.");
+            return;
+        }
+
+        arCameraManager.enabled = false;
+        EditorUtility.SetDirty(arCameraManager);
+        Debug.Log("[RGBCameraCaptureSetup] Disabled ARCameraManager on Main Camera — it was starting " +
+                  "AR Foundation's own RGB camera stream, contending with RGBCameraCapture's recording " +
+                  "for the same native camera resource.");
     }
 }

@@ -887,7 +887,6 @@ MonoBehaviour:
   proximityLogInterval: 1
   skipUsernameEntry: 1
   raceMechanicsEnabled: 1
-  recordingStopAtRaceSeconds: 30
 --- !u!4 &337142528
 Transform:
   m_ObjectHideFlags: 0
@@ -1424,6 +1423,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1019417952}
   - component: {fileID: 1019417951}
+  - component: {fileID: 1019417953}
   m_Layer: 0
   m_Name: RGBCameraCapture
   m_TagString: Untagged
@@ -1451,7 +1451,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   useGreenBackGround: 0
+  renderMode: 0
   insertIntoGallery: 1
+  stopAfterSeconds: 10
 --- !u!4 &1019417952
 Transform:
   m_ObjectHideFlags: 0
@@ -1467,6 +1469,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1019417953
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1019417950}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4c1f8b6e2a7d4f3c9b5e07d1a86f2c40, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CaptureFrameDiagnostics
+  logIntervalSeconds: 1
+  logBeforeRecording: 1
+  probeSize: 8
 --- !u!1 &1026557587
 GameObject:
   m_ObjectHideFlags: 0
@@ -2203,7 +2220,7 @@ MonoBehaviour:
   steadyHoldSeconds: 1.5
   steadyYawTolerance: 12
   steadyTimeoutSeconds: 12
-  overallTimeoutSeconds: 45
+  overallTimeoutSeconds: 30
   confirmationSeconds: 1.2
   startDistanceThreshold: 10
   startAccuracyThreshold: 10
@@ -2971,7 +2988,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2512387468973847775}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4966719baa26e4b0e8231a24d9bd491a, type: 3}
   m_Name: 

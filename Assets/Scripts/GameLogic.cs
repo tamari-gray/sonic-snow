@@ -66,16 +66,7 @@ public class GameLogic : MonoBehaviour
              "gate is folded into calibration — turn off only to park on calibration for debugging.")]
     [SerializeField] private bool raceMechanicsEnabled = true;
 
-    [Tooltip("Diagnostic cap on capture length, in race-timer seconds. Above zero the recording " +
-             "stops this many seconds into the race instead of waiting for the finish line. That " +
-             "matters because the finish is the ONLY other stop trigger and nothing else finalizes " +
-             "the file — see RGBCameraCapture.StopRecording — so on hardware that never reaches a " +
-             "finish there is otherwise no way to get a playable video off the device. Zero restores " +
-             "finish-line-only behaviour.")]
-    [SerializeField] private float recordingStopAtRaceSeconds = 30f;
-
     private float lastProximityLogTime = float.NegativeInfinity;
-    private bool recordingCapFired;
 
     /// <summary>Set once startup has finished. See the gate in <see cref="Update"/>.</summary>
     private bool armed;
@@ -147,32 +138,9 @@ public class GameLogic : MonoBehaviour
 
         if (CurrentState == GameState.Racing)
         {
-            CheckRecordingTimeCap();
             CheckCheckpointProximity();
             CheckFinishLineProximity();
         }
-    }
-
-    /// <summary>
-    /// Ends the capture partway into the race when recordingStopAtRaceSeconds is set, going through
-    /// the same StopRecording the finish line uses so the file is muxed properly rather than left
-    /// without a moov atom. Latched, because IsRecording stays true until the async teardown
-    /// reports back and calling StopRecording again in that window would trip its own
-    /// "never started" branch and strand the pending stop.
-    /// </summary>
-    private void CheckRecordingTimeCap()
-    {
-        if (recordingCapFired || recordingStopAtRaceSeconds <= 0f) return;
-        if (RaceTimer.instance == null || !RaceTimer.instance.IsRunning) return;
-        if (RaceTimer.instance.ElapsedTime < recordingStopAtRaceSeconds) return;
-
-        recordingCapFired = true;
-
-        RGBCameraCapture capture = RGBCameraCapture.Instance;
-        if (capture == null || !capture.IsRecording) return;
-
-        Debug.Log($"[GameLogic] Race timer hit {recordingStopAtRaceSeconds:0.#}s — stopping capture early.");
-        capture.StopRecording();
     }
 
     private void PollLocation()
@@ -368,9 +336,6 @@ public class GameLogic : MonoBehaviour
     void EnterRacingState()
     {
         Debug.Log("Start line reached — starting countdown!");
-
-        // Re-armed per run so a second race in the same session still gets its capped capture.
-        recordingCapFired = false;
 
         if (CountdownTimer.instance != null)
         {

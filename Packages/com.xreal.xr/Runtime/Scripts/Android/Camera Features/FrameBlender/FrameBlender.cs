@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace Unity.XR.XREAL
 {
@@ -138,14 +139,12 @@ namespace Unity.XR.XREAL
                 if (m_CameraType == CameraType.RGB)
                 {
                     m_RGBBackGroundRender.enabled = enableBackGround;
-                    m_TargetCamera[0].targetTexture = m_BlendTexture;
-                    m_TargetCamera[0].Render();
+                    RenderCaptureCamera(m_TargetCamera[0], m_BlendTexture);
                 }
                 else
                 {
                     m_LeftGrayBackGroundRender.enabled = enableBackGround;
-                    m_TargetCamera[0].targetTexture = m_BlendTexture;
-                    m_TargetCamera[0].Render();
+                    RenderCaptureCamera(m_TargetCamera[0], m_BlendTexture);
                 }
             }
             else
@@ -153,23 +152,19 @@ namespace Unity.XR.XREAL
                 if (m_CameraType == CameraType.RGB)
                 {
                     m_RGBBackGroundRender.enabled = enableBackGround;
-                    m_TargetCamera[0].targetTexture = m_BlendTextureLeft;
-                    m_TargetCamera[0].Render();
+                    RenderCaptureCamera(m_TargetCamera[0], m_BlendTextureLeft);
 
-                    m_TargetCamera[1].targetTexture = m_BlendTextureRight;
-                    m_TargetCamera[1].Render();
+                    RenderCaptureCamera(m_TargetCamera[1], m_BlendTextureRight);
                 }
                 else
                 {
                     m_LeftGrayBackGroundRender.enabled = enableBackGround;
                     m_RightGrayBackGroundRender.enabled = false;
-                    m_TargetCamera[0].targetTexture = m_BlendTextureLeft;
-                    m_TargetCamera[0].Render();
+                    RenderCaptureCamera(m_TargetCamera[0], m_BlendTextureLeft);
 
                     m_LeftGrayBackGroundRender.enabled = false;
                     m_RightGrayBackGroundRender.enabled = enableBackGround;
-                    m_TargetCamera[1].targetTexture = m_BlendTextureRight;
-                    m_TargetCamera[1].Render();
+                    RenderCaptureCamera(m_TargetCamera[1], m_BlendTextureRight);
                 }
 
                 MergeRenderTextures(m_BlendTextureLeft, m_BlendTextureRight, m_BlendTexture);
@@ -177,6 +172,95 @@ namespace Unity.XR.XREAL
             m_RGBBackGroundRender.enabled = false;
             m_LeftGrayBackGroundRender.enabled = false;
             m_RightGrayBackGroundRender.enabled = false;
+        }
+
+        // ---------------------------------------------------------------------------------------
+        // LOCAL PATCH (sonic-snow, 2026-08-20). Not XREAL's code — this package is vendored.
+        //
+        // Upstream drove the capture camera with Camera.Render(): a built-in-render-pipeline
+        // immediate-mode call, which is not the supported way to render on demand once a Scriptable
+        // Render Pipeline is active. This project runs URP 17.4 with Render Graph on;
+        // xreal-hello-world, where these samples are known to work, is on Built-in RP. That
+        // difference is the shape of the bug XREAL support read off our logcat — "no dropped frames,
+        // but the image only updated about 6 times, with identical frames in between".
+        // VideoEncoder.Commit runs once per RGB frame either way, so the mp4 gets a full ~30fps of
+        // *samples*; those samples just keep re-reading a blend texture no render refreshed.
+        //
+        // The supported on-demand render under an SRP is Camera.SubmitRenderRequest, which URP
+        // implements in UniversalRenderPipeline.ProcessRenderRequests — and for a Tex2D destination
+        // at mip 0 it renders straight into that destination with no intermediate copy, so the
+        // native pointer VideoEncoder.Commit cached still points at the pixels just drawn.
+        // ---------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// How the capture camera gets driven into the blend texture. Kept as a switch rather than a
+        /// straight replacement so both paths can be A/B'd on device from the scene, via
+        /// RGBCameraCapture.renderMode — telling them apart is the whole point of the exercise.
+        /// </summary>
+        public enum CaptureRenderMode
+        {
+            /// <summary>SubmitRenderRequest when an SRP is active, Camera.Render() otherwise.</summary>
+            Auto,
+            /// <summary>Always SubmitRenderRequest. Falls back to Camera.Render() if unsupported.</summary>
+            RenderRequest,
+            /// <summary>Always Camera.Render(). Upstream's behaviour, kept for comparison.</summary>
+            LegacyCameraRender,
+        }
+
+        public static CaptureRenderMode RenderMode = CaptureRenderMode.Auto;
+
+        /// <summary>
+        /// Capture-camera renders submitted since process start. Read alongside FrameCount (commits)
+        /// to tell "the render is never called" apart from "the render is called and produces the
+        /// same pixels" — different bugs with different fixes. CaptureFrameDiagnostics samples both.
+        /// </summary>
+        public static int RenderCount { get; private set; }
+
+        /// <summary>Latched once the request path is rejected, so it is logged once and not 30 times a second.</summary>
+        private static bool s_RenderRequestUnavailable;
+
+        // Reused rather than allocated per frame: this runs up to 30 times a second for a whole race.
+        private static readonly RenderPipeline.StandardRequest s_RenderRequest = new RenderPipeline.StandardRequest();
+
+        private void RenderCaptureCamera(Camera camera, RenderTexture target)
+        {
+            RenderCount++;
+
+            bool wantRequest = RenderMode == CaptureRenderMode.RenderRequest
+                || (RenderMode == CaptureRenderMode.Auto && GraphicsSettings.currentRenderPipeline != null);
+
+            if (wantRequest && !s_RenderRequestUnavailable)
+            {
+                s_RenderRequest.destination = target;
+                s_RenderRequest.mipLevel = 0;
+                s_RenderRequest.face = CubemapFace.Unknown;
+                s_RenderRequest.slice = 0;
+
+                if (RenderPipeline.SupportsRenderRequest(camera, s_RenderRequest))
+                {
+                    try
+                    {
+                        // URP points camera.targetTexture at the destination and restores it itself.
+                        RenderPipeline.SubmitRenderRequest(camera, s_RenderRequest);
+                        return;
+                    }
+                    catch (System.Exception e)
+                    {
+                        s_RenderRequestUnavailable = true;
+                        Debug.LogError("[FrameBlender] SubmitRenderRequest threw; falling back to " +
+                                       "Camera.Render() for the rest of this run: " + e);
+                    }
+                }
+                else
+                {
+                    s_RenderRequestUnavailable = true;
+                    Debug.LogWarning("[FrameBlender] Active render pipeline does not support " +
+                                     "StandardRequest; falling back to Camera.Render().");
+                }
+            }
+
+            camera.targetTexture = target;
+            camera.Render();
         }
         private void MergeRenderTextures(Texture leftSrc, Texture rightSrc, RenderTexture target)
         {
