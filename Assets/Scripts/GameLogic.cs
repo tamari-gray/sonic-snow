@@ -415,8 +415,9 @@ public class GameLogic : MonoBehaviour
         // anything to be retrievable. The delay is deliberate: it gives the finish celebration
         // (FinishCollectEffect, the scoreboard shown just above) a few seconds of real footage
         // instead of the video cutting out on the exact frame the beam is crossed.
-        // RGBCameraCapture.stopAfterSeconds remains a second, earlier stop trigger for hardware
-        // that never reaches this method at all (no GPS fix to ever trigger the finish line).
+        // This is now the ONLY stop trigger -- RGBCameraCapture's old auto-stop fallback was
+        // removed, so hardware that never reaches this method (no GPS fix to trigger the finish
+        // line) never stops recording and saves nothing.
         if (RGBCameraCapture.Instance != null && RGBCameraCapture.Instance.IsRecording)
             StartCoroutine(StopRecordingAfterDelay(5f));
 
@@ -436,9 +437,9 @@ public class GameLogic : MonoBehaviour
 
     /// <summary>Stops the capture a fixed delay after the finish line is reached, so the finish
     /// celebration and scoreboard land in the footage. Re-checks IsRecording rather than assuming:
-    /// RGBCameraCapture.stopAfterSeconds may already have stopped it in the meantime, and
-    /// StopRecording's own "not recording" branch would just log a harmless warning either way, but
-    /// checking first keeps that warning out of the normal-path logs.</summary>
+    /// something else could in principle have stopped it in the meantime, and StopRecording's own
+    /// "not recording" branch would just log a harmless warning either way, but checking first keeps
+    /// that warning out of the normal-path logs.</summary>
     private IEnumerator StopRecordingAfterDelay(float delaySeconds)
     {
         yield return new WaitForSeconds(delaySeconds);

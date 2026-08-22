@@ -85,20 +85,6 @@ public class RGBCameraCapture : MonoBehaviour
              "The file is written to persistentDataPath either way.")]
     [SerializeField] private bool insertIntoGallery = true;
 
-    [Header("Auto-stop")]
-    [Tooltip("Stops recording this many seconds after RecordingConfirmed goes true -- i.e. this many " +
-             "seconds of actual footage after calibration finishes (recording starts in " +
-             "CalibrationScreen.Finish()). Self-contained and independent of race state, so it fires " +
-             "even if the race never reaches GameLogic.GameState.Racing (no GPS fix on hardware with " +
-             "no GNSS, the finish line never reached, etc.) -- previously this cap lived in " +
-             "GameLogic.CheckRecordingTimeCap gated on the race timer, which meant it silently never " +
-             "fired unless a race was actually underway. Zero disables. " +
-             "GameLogic.OnFinishLineReached() is still a second, earlier stop trigger if the finish " +
-             "line is reached before this fires.")]
-    [SerializeField] private float stopAfterSeconds = 10f;
-
-    private bool m_StopAfterSecondsFired;
-
     private XREALVideoCapture m_VideoCapture;
     private GalleryDataProvider m_GalleryDataTool;
     private string m_VideoPath;
@@ -157,17 +143,6 @@ public class RGBCameraCapture : MonoBehaviour
         FrameBlender.RenderMode = renderMode;
     }
 
-    private void Update()
-    {
-        if (m_StopAfterSecondsFired || stopAfterSeconds <= 0f) return;
-        if (!RecordingConfirmed) return;
-        if (Time.time - RecordingConfirmedTime < stopAfterSeconds) return;
-
-        m_StopAfterSecondsFired = true;
-        Debug.Log("[RGBCameraCapture] " + stopAfterSeconds + "s of confirmed recording elapsed -- auto-stopping.");
-        StopRecording();
-    }
-
     private string BuildVideoSavePath()
     {
         string timeStamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -191,7 +166,6 @@ public class RGBCameraCapture : MonoBehaviour
         RecordingConfirmed = false;
         RecordingFailed = false;
         RecordingFailureReason = null;
-        m_StopAfterSecondsFired = false;
 
         if (m_VideoCapture == null)
         {

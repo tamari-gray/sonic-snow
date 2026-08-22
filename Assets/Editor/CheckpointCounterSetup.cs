@@ -4,7 +4,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 
 /// <summary>
-/// Drops the checkpoint counter into the top-left of the scene's Canvas and wires it to
+/// Drops the checkpoint counter into the bottom-left of the scene's Canvas and wires it to
 /// a <see cref="CheckpointCounterUI"/>.
 ///
 /// An editor tool rather than a hand-placed object for the same reason as the
@@ -20,6 +20,17 @@ public static class CheckpointCounterSetup
 
     // The project's TMP font, so the counter matches the rest of the HUD.
     private const string FontGuid = "380f1a141427a294684671969d6342cb";
+
+    private const string ScenePath = "Assets/Scenes/Game.unity";
+
+    /// <summary>Batch-mode entry point, same pattern as RGBCameraCaptureSetup.SetUpBatch.</summary>
+    public static void SetUpBatch()
+    {
+        EditorSceneManager.OpenScene(ScenePath);
+        SetUp();
+        bool saved = EditorSceneManager.SaveOpenScenes();
+        Debug.Log("[CheckpointCounterSetup] Applied to " + ScenePath + ". Saved: " + saved);
+    }
 
     [MenuItem("Sonic Snow/Set Up Checkpoint Counter")]
     public static void SetUp()
@@ -39,19 +50,22 @@ public static class CheckpointCounterSetup
         RectTransform rect = counter.GetComponent<RectTransform>();
         if (rect == null) rect = counter.AddComponent<RectTransform>();
 
-        // Anchor and pivot both top-left, so the inset stays put on any screen size.
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(0f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
+        // Anchor and pivot both bottom-left, so the inset stays put on any screen size.
+        // Moved from top-left to the bottom by request: HUD info at the bottom of the
+        // view is safer to read while moving at speed (less eye travel from the terrain
+        // ahead), same reasoning as TimerText's move in Game.unity.
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(0f, 0f);
+        rect.pivot = new Vector2(0f, 0f);
         rect.sizeDelta = new Vector2(260f, 70f);
-        rect.anchoredPosition = new Vector2(24f, -24f);
+        rect.anchoredPosition = new Vector2(24f, 24f);
         rect.localScale = Vector3.one;
 
         TextMeshProUGUI text = counter.GetComponent<TextMeshProUGUI>();
         if (text == null) text = Undo.AddComponent<TextMeshProUGUI>(counter);
 
         text.fontSize = 48f;
-        text.alignment = TextAlignmentOptions.TopLeft;
+        text.alignment = TextAlignmentOptions.BottomLeft;
         text.color = Color.white;
         text.raycastTarget = false;
         text.text = "0/0";
@@ -75,7 +89,7 @@ public static class CheckpointCounterSetup
         EditorSceneManager.MarkSceneDirty(canvas.gameObject.scene);
         Selection.activeGameObject = counter;
 
-        Debug.Log("[CheckpointCounterSetup] Counter placed top-left and wired. Save the scene (Ctrl+S).");
+        Debug.Log("[CheckpointCounterSetup] Counter placed bottom-left and wired. Save the scene (Ctrl+S).");
     }
 
     private static GameObject FindOrCreateChild(Transform parent, string name)

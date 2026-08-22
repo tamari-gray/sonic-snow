@@ -344,11 +344,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 575066346}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 566.6, y: -74}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 566.6, y: 74}
   m_SizeDelta: {x: 447.778, y: 75.19519}
-  m_Pivot: {x: 0, y: 1}
+  m_Pivot: {x: 0, y: 0}
 --- !u!1 &163945032
 GameObject:
   m_ObjectHideFlags: 0
@@ -1453,7 +1453,6 @@ MonoBehaviour:
   useGreenBackGround: 0
   renderMode: 0
   insertIntoGallery: 1
-  stopAfterSeconds: 10
 --- !u!4 &1019417952
 Transform:
   m_ObjectHideFlags: 0
@@ -1791,6 +1790,52 @@ Canvas:
   m_SortingLayerID: 0
   m_SortingOrder: 0
   m_TargetDisplay: 0
+--- !u!1 &1273669638
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1273669640}
+  - component: {fileID: 1273669639}
+  m_Layer: 0
+  m_Name: MockGpsRaceDriver
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1273669639
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1273669638}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7b3f0c9e2a5d4f8b91c6d2e0a4f7b8c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MockGpsRaceDriver
+  driveWithMockGps: 0
+  secondsBetweenSteps: 4
+--- !u!4 &1273669640
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1273669638}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1329519895
 GameObject:
   m_ObjectHideFlags: 0
@@ -2682,11 +2727,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 575066346}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 24, y: -24}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 24, y: 24}
   m_SizeDelta: {x: 260, y: 70}
-  m_Pivot: {x: 0, y: 1}
+  m_Pivot: {x: 0, y: 0}
 --- !u!114 &2085140089
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2756,7 +2801,7 @@ MonoBehaviour:
   m_fontSizeMax: 72
   m_fontStyle: 0
   m_HorizontalAlignment: 1
-  m_VerticalAlignment: 256
+  m_VerticalAlignment: 1024
   m_textAlignment: 65535
   m_characterSpacing: 0
   m_characterHorizontalScale: 1
@@ -3502,3 +3547,4 @@ SceneRoots:
   - {fileID: 337142528}
   - {fileID: 1867507130}
   - {fileID: 1019417952}
+  - {fileID: 1273669640}
