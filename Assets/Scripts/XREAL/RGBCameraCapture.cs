@@ -80,6 +80,13 @@ public class RGBCameraCapture : MonoBehaviour
              "on Auto, the render call was the cause. See the local patch in FrameBlender.cs.")]
     [SerializeField] private FrameBlender.CaptureRenderMode renderMode = FrameBlender.CaptureRenderMode.Auto;
 
+    [Tooltip("Capture-camera renders per second. 0 renders once per RGB frame (~30), which is a " +
+             "second full scene render every frame and roughly halves the app's frame rate — on " +
+             "see-through glasses that reads as AR juddering against the real world and head-locked " +
+             "UI wobbling. Lower values buy live smoothness back at the cost of footage smoothness; " +
+             "the mp4 stays a ~30fps container either way, it just repeats frames.")]
+    [SerializeField] private float captureRenderFps = 15f;
+
     [Header("Gallery")]
     [Tooltip("Copies the finished file into the device gallery so it can be pulled off without adb. " +
              "The file is written to persistentDataPath either way.")]
@@ -141,6 +148,7 @@ public class RGBCameraCapture : MonoBehaviour
         // but the blender is constructed inside StartVideoModeAsync, so setting it here is early
         // enough for any run and keeps the scene as the authority over the code default.
         FrameBlender.RenderMode = renderMode;
+        FrameBlender.MaxRenderFps = captureRenderFps;
     }
 
     private string BuildVideoSavePath()

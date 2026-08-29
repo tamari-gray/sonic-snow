@@ -109,3 +109,6 @@ InitTestScene*.unity*
 # rather than kept in history.
 logcat.txt
 logcat-stripped.txt
+
+# machine-specific: Beam Pro wireless adb address cached by the SessionStart hook
+.claude/beam-pro-ip.txt

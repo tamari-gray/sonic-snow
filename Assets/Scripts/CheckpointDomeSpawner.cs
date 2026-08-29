@@ -28,8 +28,18 @@ public class CheckpointDomeSpawner : MonoBehaviour
     [SerializeField] private float contactShadowRadius = 2.5f;
 
     [Header("Collection")]
-    [Tooltip("How close the rider has to get for a checkpoint to count, in metres.")]
+    [Tooltip("How close the rider has to get for a checkpoint to count, in metres, measured " +
+             "by GPS against the checkpoint's real coordinate.")]
     [SerializeField] private float collectRadius = 10f;
+
+    [Tooltip("How close the rider has to get to the dome they can actually see, in metres, " +
+             "before it counts regardless of what GPS says. The dome's sphere is ~4m across " +
+             "and its glow footprint ~6m, so this is set to retire it as the rider arrives at " +
+             "that footprint rather than after they've ridden through the middle of it. " +
+             "Exists because GPS fixes arrive at ~1Hz and trail the real position: at riding " +
+             "speed the dome is already behind the rider by the time the fix falls inside " +
+             "collectRadius. Set to 0 to disable and go back to GPS-only collection.")]
+    [SerializeField] private float reachRadius = 6f;
 
     [Header("Collect Effect")]
     [Tooltip("How long the dome instance takes to shrink away once collected, in seconds. " +
@@ -125,10 +135,16 @@ public class CheckpointDomeSpawner : MonoBehaviour
     /// <summary>
     /// Retires any checkpoint the rider has reached. Call each frame while racing.
     ///
-    /// Distance is measured by GPS against the checkpoint's real coordinate, not by how
-    /// close the rider is to the dome on screen. The dome is an estimate that shifts as
-    /// GeoAnchor sharpens its fit, so scoring off it would make collection depend on how
-    /// good the alignment happened to be at that moment. Same reasoning as the finish.
+    /// Two ways to reach one, whichever lands first:
+    ///
+    /// - GPS distance to the checkpoint's real coordinate, within collectRadius. This is
+    ///   the authority: the dome is an estimate that shifts as GeoAnchor sharpens its fit,
+    ///   so a rider whose alignment is poor still collects on the coordinate they rode over.
+    /// - Physical distance to the dome as rendered, within reachRadius. GPS fixes arrive at
+    ///   ~1Hz and trail the real position, so on GPS alone a dome doesn't pop until the
+    ///   rider is already through it. This closes that gap without letting a bad alignment
+    ///   hand out checkpoints the rider never went near — reachRadius is small and the test
+    ///   needs an aligned anchor (see GeoAnchor.IsPlayerWithinReach).
     ///
     /// Deliberately unordered for now: passing checkpoint 2 first collects checkpoint 2.
     /// Enforcing sequence is a rule change, not a detection change.
@@ -142,13 +158,27 @@ public class CheckpointDomeSpawner : MonoBehaviour
             if (checkpoint.Collected) continue;
 
             float distance = GpsUtils.HaversineDistance(lat, lng, checkpoint.Lat, checkpoint.Lng);
-            if (distance > collectRadius) continue;
 
-            Collect(i, distance);
+            if (distance <= collectRadius)
+            {
+                Collect(i, distance, "GPS");
+                continue;
+            }
+
+            // GPS hasn't caught up, but the rider is standing at the dome they can see.
+            // Retiring it here is what makes collection feel like contact instead of like
+            // a delayed radio check. Scoring is unchanged — this decides *when* the dome
+            // retires, not whether an unvisited checkpoint can count.
+            if (checkpoint.Instance != null &&
+                GeoAnchor.Instance != null &&
+                GeoAnchor.Instance.IsPlayerWithinReach(checkpoint.Instance.transform.position, reachRadius))
+            {
+                Collect(i, distance, "reach");
+            }
         }
     }
 
-    private void Collect(int index, float distance)
+    private void Collect(int index, float distance, string trigger)
     {
         Checkpoint checkpoint = checkpoints[index];
 
@@ -166,7 +196,7 @@ public class CheckpointDomeSpawner : MonoBehaviour
             StartCoroutine(ShrinkAndHide(checkpoint.Instance, shrinkDuration));
         }
 
-        Debug.Log($"Checkpoint {index + 1} reached at {distance:F1}m — " +
+        Debug.Log($"Checkpoint {index + 1} reached at {distance:F1}m by {trigger} — " +
                   $"{CollectedCount}/{checkpoints.Count} collected");
     }
 

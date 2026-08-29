@@ -93,12 +93,12 @@ public static class RGBCameraCaptureSetup
         serialized.FindProperty("useGreenBackGround").boolValue = false;
         serialized.FindProperty("insertIntoGallery").boolValue = true;
         serialized.FindProperty("renderMode").enumValueIndex = (int)FrameBlender.CaptureRenderMode.Auto;
+        serialized.FindProperty("captureRenderFps").floatValue = 15f;
         serialized.ApplyModifiedPropertiesWithoutUndo();
 
         EditorUtility.SetDirty(root);
 
         AddDiagnostics(root);
-        EnableRecordingOnCalibrationScreen();
         DisableConflictingARCameraManager();
 
         Debug.Log("[RGBCameraCaptureSetup] RGBCameraCapture wired for Blend mode. Starts as soon as " +
@@ -127,14 +127,26 @@ public static class RGBCameraCaptureSetup
         }
     }
 
+    [MenuItem("Sonic Snow/XREAL/Enable Race Recording")]
+    public static void EnableRecording() => SetRecording(true);
+
+    [MenuItem("Sonic Snow/XREAL/Disable Race Recording")]
+    public static void DisableRecording() => SetRecording(false);
+
     /// <summary>
-    /// Flips CalibrationScreen.recordingEnabled on in the scene. This is not optional housekeeping:
-    /// Game.unity carries recordingEnabled: 0 from when the feature was switched off, and the
-    /// serialized scene value beats the C# field initialiser every time. Skip this and the whole
-    /// capture sits dormant with nothing in the logs to explain why — which is exactly how this
-    /// feature "mysteriously died" once before.
+    /// Flips CalibrationScreen.recordingEnabled in the scene. The serialized scene value beats the
+    /// C# field initialiser every time, so this — not the field default — is what a build ships.
+    ///
+    /// Deliberately NOT called from SetUp() any more. It used to be, on the reasoning that a scene
+    /// carrying recordingEnabled: 0 would leave the whole capture dormant with nothing in the logs
+    /// to explain why (which is how this feature "mysteriously died" once before). But recording is
+    /// now a thing we turn off on purpose — it costs a second full scene render per RGB frame, and
+    /// A/B-ing it against the live jitter is a routine test. Having SetUp() silently turn it back on
+    /// makes that test unrepeatable, which is the worse failure of the two. Use the two menu items
+    /// above, and check the "Recording permission" line on the calibration screen if you're unsure
+    /// which way the scene is currently set — it reads "recording off" when this is false.
     /// </summary>
-    private static void EnableRecordingOnCalibrationScreen()
+    private static void SetRecording(bool on)
     {
         CalibrationScreen calibration = Object.FindAnyObjectByType<CalibrationScreen>(FindObjectsInactive.Include);
 
@@ -146,12 +158,12 @@ public static class RGBCameraCaptureSetup
         }
 
         SerializedObject serialized = new SerializedObject(calibration);
-        SerializedProperty enabled = serialized.FindProperty("recordingEnabled");
-        enabled.boolValue = true;
+        serialized.FindProperty("recordingEnabled").boolValue = on;
         serialized.ApplyModifiedPropertiesWithoutUndo();
 
         EditorUtility.SetDirty(calibration);
-        Debug.Log("[RGBCameraCaptureSetup] CalibrationScreen.recordingEnabled set to true in the scene.");
+        Debug.Log($"[RGBCameraCaptureSetup] CalibrationScreen.recordingEnabled set to {on} in the scene. " +
+                  "Save the scene for it to reach a build.");
     }
 
     /// <summary>

@@ -835,6 +835,7 @@ MonoBehaviour:
   verticalOffset: 0
   contactShadowRadius: 2.5
   collectRadius: 10
+  reachRadius: 6
   shrinkDuration: 0.42
 --- !u!4 &336689858
 Transform:
@@ -883,6 +884,7 @@ MonoBehaviour:
   usernameInputField: {fileID: 0}
   playButton: {fileID: 0}
   finishProximityRadius: 10
+  finishReachRadius: 6
   maxFinishTriggerAccuracy: 20
   proximityLogInterval: 1
   skipUsernameEntry: 1
@@ -937,7 +939,7 @@ Light:
   m_InnerSpotAngle: 21.80208
   m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
-    m_Type: 2
+    m_Type: 0
     m_Resolution: -1
     m_CustomResolution: -1
     m_Strength: 1
@@ -1452,6 +1454,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   useGreenBackGround: 0
   renderMode: 0
+  captureRenderFps: 15
   insertIntoGallery: 1
 --- !u!4 &1019417952
 Transform:
@@ -1482,7 +1485,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CaptureFrameDiagnostics
   logIntervalSeconds: 1
   logBeforeRecording: 1
+  measureNewImages: 0
   probeSize: 8
+  measureFrameTimes: 1
+  longFrameMs: 20
 --- !u!1 &1026557587
 GameObject:
   m_ObjectHideFlags: 0
@@ -2269,7 +2275,7 @@ MonoBehaviour:
   confirmationSeconds: 1.2
   startDistanceThreshold: 10
   startAccuracyThreshold: 10
-  recordingEnabled: 1
+  recordingEnabled: 0
 --- !u!4 &1867507130
 Transform:
   m_ObjectHideFlags: 0

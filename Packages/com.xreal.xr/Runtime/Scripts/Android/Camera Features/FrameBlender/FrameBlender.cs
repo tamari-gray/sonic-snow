@@ -102,6 +102,8 @@ namespace Unity.XR.XREAL
                 m_RGBBackGroundRender.SetMaterial(m_BackGroundMat);
             }
 
+            bool render = ShouldRenderThisFrame();
+
             bool isyuv = frame.textureType == TextureType.YUV;
             const string MainTextureStr = "_MainTex";
             const string UTextureStr = "_UTex";
@@ -110,7 +112,7 @@ namespace Unity.XR.XREAL
             switch (BlendMode)
             {
                 case BlendMode.VirtualOnly:
-                    CameraRenderToTarget(false);
+                    if (render) CameraRenderToTarget(false);
                     break;
                 case BlendMode.CameraOnly:
                 case BlendMode.Blend:
@@ -124,7 +126,7 @@ namespace Unity.XR.XREAL
                     {
                         m_BackGroundMat.SetTexture(MainTextureStr, frame.textures[0]);
                     }
-                    CameraRenderToTarget(true);
+                    if (render) CameraRenderToTarget(true);
                     break;
             }
 
@@ -208,6 +210,38 @@ namespace Unity.XR.XREAL
         }
 
         public static CaptureRenderMode RenderMode = CaptureRenderMode.Auto;
+
+        // ---------------------------------------------------------------------------------------
+        // LOCAL PATCH (sonic-snow, 2026-08-22): capture render-rate cap.
+        //
+        // The capture camera is a second full render of the scene, and OnFrame is clocked by the RGB
+        // camera at ~30fps, so once acquisition was fixed (ARCameraManager contention, c35ccec) the
+        // app started paying that cost every frame. Measured on device: ~60fps idle, ~25fps while
+        // capture renders at full rate. On optical see-through glasses that halved rate is not a
+        // cosmetic problem — world-locked AR judders against the real world, and the compositor's
+        // reprojection drags head-locked UI by a whole frame of head motion.
+        //
+        // Capping the render rate trades footage smoothness for live smoothness. Commits are
+        // deliberately NOT capped: the encoder keeps receiving a sample per RGB frame with its real
+        // timestamp, so the container stays ~30fps and the skipped frames become H.264 skip frames
+        // (a few hundred bytes each) rather than shifting the timeline.
+        // ---------------------------------------------------------------------------------------
+
+        /// <summary>Capture-camera renders per second, or 0 for one per RGB frame (~30).</summary>
+        public static float MaxRenderFps;
+
+        private float m_LastRenderTime = float.NegativeInfinity;
+
+        private bool ShouldRenderThisFrame()
+        {
+            if (MaxRenderFps <= 0f) return true;
+
+            float now = Time.realtimeSinceStartup;
+            if (now - m_LastRenderTime < 1f / MaxRenderFps) return false;
+
+            m_LastRenderTime = now;
+            return true;
+        }
 
         /// <summary>
         /// Capture-camera renders submitted since process start. Read alongside FrameCount (commits)

@@ -27,6 +27,14 @@ public class FinishLinePillar : MonoBehaviour
     /// is currently spawned.</summary>
     public Vector3 LocalPosition => spawnedPillar != null ? spawnedPillar.transform.localPosition : Vector3.zero;
 
+    /// <summary>True while a beam is spawned.</summary>
+    public bool IsSpawned => spawnedPillar != null;
+
+    /// <summary>The spawned beam's position in Unity world space — where the rider actually
+    /// sees it, alignment and all. Used by the finish's reach check; Vector3.zero if no beam
+    /// is currently spawned, so callers should gate on <see cref="IsSpawned"/>.</summary>
+    public Vector3 WorldPosition => spawnedPillar != null ? spawnedPillar.transform.position : Vector3.zero;
+
     private void Awake()
     {
         Instance = this;

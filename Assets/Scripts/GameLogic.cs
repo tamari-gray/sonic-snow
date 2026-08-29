@@ -41,6 +41,15 @@ public class GameLogic : MonoBehaviour
     [Tooltip("How close to the finish coord ends the race, in metres.")]
     [SerializeField] private float finishProximityRadius = 10f;
 
+    [Tooltip("How close the rider has to get to the beam they can actually see, in metres, " +
+             "before the race ends regardless of what GPS says. Exists because GPS fixes " +
+             "arrive at ~1Hz and trail the real position, so on GPS alone the beam is already " +
+             "behind the rider by the time the fix falls inside finishProximityRadius. Kept " +
+             "tighter than finishProximityRadius and gated on a motion-fitted anchor (see " +
+             "IsAtRenderedFinish) since ending the race early is not recoverable. Set to 0 " +
+             "to disable and go back to a GPS-only finish.")]
+    [SerializeField] private float finishReachRadius = 6f;
+
     [Tooltip("Don't trigger the finish on a fix worse than this, in metres. Previously unset — " +
              "the finish had no accuracy gate at all, so a rough fix could end the race before " +
              "the rider physically reached the beam.")]
@@ -220,8 +229,10 @@ public class GameLogic : MonoBehaviour
 
         MapData config = MapDataFetcher.Instance.LoadedConfig;
 
-        // Race timing is decided by GPS, never by the visual beam. The beam is an
-        // estimate that converges during the run; GPS is the source of truth.
+        // GPS against the finish coordinate is the primary test and the one that owns
+        // timing — the beam is an estimate that converges during the run. The beam only
+        // gets a say when GPS says the rider is still short of the finish, where it
+        // covers the ~1Hz fix lag rather than overriding a good fix (see IsAtRenderedFinish).
         float distance = GpsUtils.HaversineDistance(currentLat, currentLng, config.finishLat, config.finishLng);
 
         if (ShouldLogProximity())
@@ -230,12 +241,24 @@ public class GameLogic : MonoBehaviour
             string checkpoints = domes != null && domes.Total > 0
                 ? $"CP {domes.CollectedCount}/{domes.Total} | " : "";
 
-            Debug.Log($"Finish line {distance:F1}m away (need <{finishProximityRadius:F0}m) | " +
+            Debug.Log($"Finish line {distance:F1}m away (need <{finishProximityRadius:F0}m GPS " +
+                      $"or <{finishReachRadius:F0}m to the beam) | " +
                       $"GPS ±{LocationHandler.Instance.HorizontalAccuracy:F1}m (need <{maxFinishTriggerAccuracy:F0}m) | " +
                       $"{checkpoints}anchor {(GeoAnchor.Instance != null ? GeoAnchor.Instance.StatusLine : "missing")}");
         }
 
-        if (distance > finishProximityRadius) return;
+        if (distance > finishProximityRadius)
+        {
+            // GPS hasn't caught up, but the rider is standing at the beam they can see.
+            if (IsAtRenderedFinish())
+            {
+                Debug.Log($"Finish reached at the beam ({finishReachRadius:F0}m reach) while GPS " +
+                          $"still reads {distance:F1}m — ending on the rider's actual position");
+                OnFinishLineReached();
+            }
+
+            return;
+        }
 
         if (LocationHandler.Instance.HorizontalAccuracy > maxFinishTriggerAccuracy)
         {
@@ -246,6 +269,26 @@ public class GameLogic : MonoBehaviour
         }
 
         OnFinishLineReached();
+    }
+
+    /// <summary>
+    /// True once the rider is physically at the finish beam as rendered, rather than at the
+    /// finish coordinate as GPS reports it. Ending the race is irreversible, so this path is
+    /// deliberately stricter than the checkpoints' equivalent: it needs the motion fit, not
+    /// just the launch-seed alignment, so a sloppy launch ritual can't plant the beam somewhere
+    /// the rider happens to pass early. A rider who has ridden the route has a motion fit long
+    /// before the finish; if the fit never converges, the GPS path above still ends the race.
+    /// </summary>
+    private bool IsAtRenderedFinish()
+    {
+        if (finishReachRadius <= 0f) return false;
+
+        if (FinishLinePillar.Instance == null || !FinishLinePillar.Instance.IsSpawned) return false;
+
+        GeoAnchor anchor = GeoAnchor.Instance;
+        if (anchor == null || !anchor.HasMotionFit) return false;
+
+        return anchor.IsPlayerWithinReach(FinishLinePillar.Instance.WorldPosition, finishReachRadius);
     }
 
     /// <summary>

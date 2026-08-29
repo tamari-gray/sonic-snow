@@ -542,6 +542,50 @@ public class GeoAnchor : MonoBehaviour
         return geoRoot.TransformPoint(enu);
     }
 
+    /// <summary>
+    /// The player's head position in Unity world space. Falls back to Camera.main if the
+    /// scene reference was left empty, matching how the rest of this class resolves it.
+    /// </summary>
+    public bool TryGetPlayerWorldPosition(out Vector3 position)
+    {
+        if (arCamera == null) arCamera = Camera.main;
+
+        if (arCamera == null)
+        {
+            position = Vector3.zero;
+            return false;
+        }
+
+        position = arCamera.transform.position;
+        return true;
+    }
+
+    /// <summary>
+    /// True if the player is within <paramref name="radius"/> metres of a rendered world
+    /// position, measured on the ground plane so the rider's eye height (and any altitude
+    /// error in the placement) doesn't eat into the radius.
+    ///
+    /// This is the "close enough to touch it" test, deliberately separate from the GPS
+    /// distance checks. Fixes arrive at ~1Hz and trail the real position, so at riding
+    /// speed the rider is visibly through a dome several metres before GPS agrees — which
+    /// reads as the dome refusing to pop until they're inside it. Gameplay that should
+    /// feel immediate can trigger off this; anything that has to be defensible after the
+    /// run (timing, scoring) stays on GPS.
+    ///
+    /// Requires an alignment: with no anchor, rendered positions are meaningless.
+    /// </summary>
+    public bool IsPlayerWithinReach(Vector3 worldPoint, float radius)
+    {
+        if (radius <= 0f) return false;
+        if (!IsAligned) return false;
+        if (!TryGetPlayerWorldPosition(out Vector3 player)) return false;
+
+        float dx = player.x - worldPoint.x;
+        float dz = player.z - worldPoint.z;
+
+        return dx * dx + dz * dz <= radius * radius;
+    }
+
     private void EaseRoot()
     {
         if (!IsAligned) return;
