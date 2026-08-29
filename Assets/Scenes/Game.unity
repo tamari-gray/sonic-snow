@@ -1445,9 +1445,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70ac772a2d564a06ba08d09589773f55, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RGBCameraCapture
-  blendMode: 0
+  blendMode: 2
   resolutionLevel: 0
-  audioState: 2
+  audioState: 3
   captureSide: 0
   cullingMask:
     serializedVersion: 2
@@ -2275,7 +2275,7 @@ MonoBehaviour:
   confirmationSeconds: 1.2
   startDistanceThreshold: 10
   startAccuracyThreshold: 10
-  recordingEnabled: 0
+  recordingEnabled: 1
 --- !u!4 &1867507130
 Transform:
   m_ObjectHideFlags: 0

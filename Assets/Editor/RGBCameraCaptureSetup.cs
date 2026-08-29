@@ -87,7 +87,13 @@ public static class RGBCameraCaptureSetup
         SerializedObject serialized = new SerializedObject(capture);
         serialized.FindProperty("blendMode").enumValueIndex = (int)BlendMode.Blend;
         serialized.FindProperty("resolutionLevel").enumValueIndex = (int)RGBCameraCapture.ResolutionLevel.High;
-        serialized.FindProperty("audioState").enumValueIndex = (int)AudioState.ApplicationAndMicAudio;
+        // AudioState.None, not ApplicationAndMicAudio. The mic path failed continuously on device
+        // (AudioFlinger logging "PatchRecord getNextBuffer failed" / "dropping 192 frames" thousands
+        // of lines a second), which both flooded logcat badly enough to evict every [CaptureDiag]
+        // line within seconds — making the capture unmeasurable — and put a failing audio thread
+        // next to the render loop. Footage from this recorder is meant to be laid over
+        // separately-shot headcam video, which carries its own audio, so nothing needs the mic.
+        serialized.FindProperty("audioState").enumValueIndex = (int)AudioState.None;
         serialized.FindProperty("captureSide").enumValueIndex = (int)CaptureSide.Single;
         serialized.FindProperty("cullingMask").intValue = -1;
         serialized.FindProperty("useGreenBackGround").boolValue = false;
@@ -125,6 +131,50 @@ public static class RGBCameraCaptureSetup
             Debug.Log("[RGBCameraCaptureSetup] Added CaptureFrameDiagnostics — watch logcat for " +
                       "[CaptureDiag] lines during a race.");
         }
+    }
+
+    [MenuItem("Sonic Snow/XREAL/Recording Mode/AR Only (for overlay)")]
+    public static void SetModeArOnly() => SetBlendMode(BlendMode.VirtualOnly);
+
+    [MenuItem("Sonic Snow/XREAL/Recording Mode/Real World + AR (Blend)")]
+    public static void SetModeBlend() => SetBlendMode(BlendMode.Blend);
+
+    /// <summary>
+    /// Switches what the recorder actually writes.
+    ///
+    /// VirtualOnly records the AR layer alone against a black background — see FrameBlender's
+    /// BlendMode switch, where it is the one case that calls CameraRenderToTarget(false) and so
+    /// never composites the RGB frame in. That is the mode to use for footage meant to be laid
+    /// over separately-shot headcam video: the content in this game is emissive (glowing domes,
+    /// beam, retro text) on black, so it composites with a Screen or Add blend in any editor
+    /// with no keying at all. Chroma key is the worse option here and useGreenBackGround is
+    /// deliberately left false — green fringes every glow edge and the soft alpha falls apart.
+    ///
+    /// Note this does NOT by itself stop the RGB camera: FrameBlender.OnFrame is still driven by
+    /// camera frames (it takes frame.timeStamp from them) even when it ignores their pixels, so
+    /// treat any frame-rate benefit as unproven until measured on device with CaptureFrameDiagnostics.
+    /// </summary>
+    private static void SetBlendMode(BlendMode mode)
+    {
+        RGBCameraCapture capture = Object.FindAnyObjectByType<RGBCameraCapture>(FindObjectsInactive.Include);
+
+        if (capture == null)
+        {
+            Debug.LogWarning("[RGBCameraCaptureSetup] No RGBCameraCapture in the scene — run " +
+                             "\"Set Up RGB Camera Capture\" first.");
+            return;
+        }
+
+        SerializedObject serialized = new SerializedObject(capture);
+        serialized.FindProperty("blendMode").enumValueIndex = (int)mode;
+        serialized.FindProperty("useGreenBackGround").boolValue = false;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+
+        EditorUtility.SetDirty(capture);
+        Debug.Log($"[RGBCameraCaptureSetup] Capture blendMode set to {mode} in the scene. " +
+                  "Save the scene for it to reach a build. Note RGBCameraCapture.EffectiveBlendMode " +
+                  "reports what the SDK actually ran with — it silently downgrades Blend to " +
+                  "VirtualOnly when the RGB camera is busy.");
     }
 
     [MenuItem("Sonic Snow/XREAL/Enable Race Recording")]
